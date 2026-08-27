@@ -23,6 +23,7 @@
  */
 #define IDX(qr, i, j)  ((size_t)(i) * (qr)->W + ((j) - (i) + (qr)->kl))
 
+#ifndef BANDQR_NO_THREADS
 static inline void cpu_relax(void)
 {
 #if defined(__x86_64__)
@@ -31,6 +32,7 @@ static inline void cpu_relax(void)
     __asm__ __volatile__("yield");
 #endif
 }
+#endif /* !BANDQR_NO_THREADS */
 
 static inline int ilast_of(int jcol, int kl, int m)
 {

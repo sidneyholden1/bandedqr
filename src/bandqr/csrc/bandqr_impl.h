@@ -74,7 +74,9 @@ static void SUF(run_column)(struct SUF(band_qr) *qr, int jcol, long off,
     SCALAR *band = qr->band;
     int ilast = ilast_of(jcol, kl, m);
     long r = 0;
-#ifndef BANDQR_NO_THREADS
+#ifdef BANDQR_NO_THREADS
+    (void)front;
+#else
     int since = 0;
 #endif
     for (int q = ilast; q >= jcol + 1; q--, r++) {

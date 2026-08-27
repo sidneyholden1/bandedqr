@@ -123,6 +123,8 @@ def factorize(A, method="auto", kl=None, ku=None, dense_rows=None,
             return BandQR(to_band(A, kl, ku), kl, ku, nthreads=nthreads)
         return RideQR(A, kl, ku, dr)
     if method == "bordered":
+        if not has_rows and not has_cols:      # no borders: nothing to correct
+            return BandQR(to_band(A, kl, ku), kl, ku, nthreads=nthreads)
         return BorderedQR(A, kl, ku, dr, dc)
     raise ValueError(f"unhandled method {method!r}")          # pragma: no cover
 
