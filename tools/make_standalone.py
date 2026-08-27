@@ -1,68 +1,159 @@
-"""Fold bandqr.h + bandqr.c + bandqr.py into one self-compiling file,
-bandqr_standalone.py, that can be copy-pasted/emailed to a collaborator.
+"""Fold the whole package into one self-compiling file, `bandqr_standalone.py`.
 
-Run:  python make_standalone.py
+The result embeds the C source, compiles it on first import, and needs nothing
+but numpy (scipy only for the sparse/almost-banded helpers, mlx only for the
+GPU backend).  Copy the one file anywhere:
+
+    from bandqr_standalone import solve, factorize, BandQR
+    x = solve(A, b)
+
+Run:  python tools/make_standalone.py
 """
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+PKG = os.path.join(ROOT, "src", "bandqr")
+CSRC = os.path.join(PKG, "csrc")
 
-# C source = header (opaque typedefs + prototypes), then the driver with both
-# local includes inlined: bandqr.h once at the top, bandqr_impl.h at each of the
-# two instantiation points (it is included once per scalar type).
-h    = open(os.path.join(HERE, "bandqr.h")).read()
-impl = open(os.path.join(HERE, "bandqr_impl.h")).read()
-c = open(os.path.join(HERE, "bandqr.c")).read()
-c = c.replace('#include "bandqr.h"', "/* header inlined above */")
-c = c.replace('#include "bandqr_impl.h"', impl)        # both occurrences
-csrc = h + "\n" + c
+# Modules in dependency order.  Everything lands in one flat namespace, so the
+# intra-package imports are stripped and the names simply resolve.
+# `gpu` is deliberately absent: it needs MLX anyway, and flattening it would
+# collide with batched.py, which defines its own `solve_batched` and
+# `BatchedBandQR`.  A stub stands in so the batched front end still dispatches.
+MODULES = ["_band", "structure", "recurrence", "banded", "almost", "refine",
+           "batched", "api"]
 
-# Python API = everything in bandqr.py AFTER the CDLL-load line.
-py = open(os.path.join(HERE, "bandqr.py")).read()
-marker = '_lib = ct.CDLL(os.path.join(os.path.dirname(__file__), "libbandqr.dylib"))'
-body = py.split(marker, 1)[1]
 
-PREAMBLE = '''"""Self-contained banded / almost-banded Givens QR solver (single file).
+def read(path):
+    with open(path) as fh:
+        return fh.read()
 
-The C kernel is embedded below and compiled on first import -- needs a C
-compiler (cc/clang/gcc) and numpy; scipy only for the sparse helpers. Copy this
-one file anywhere and:
 
-    from bandqr_standalone import BandQR, dense_to_band, solve_bordered
-    qr = BandQR(dense_to_band(A, kl, ku), kl, ku)
-    x  = qr.solve(b)
+def build_c_source():
+    """bandqr.h, then bandqr.c with both local includes inlined.
 
-Set CC=... to choose a compiler, BANDQR_CACHE=... to choose the build dir.
+    bandqr_impl.h is included once per scalar type, so both occurrences are
+    substituted -- that is the templating, and it has to survive flattening.
+    """
+    h = read(os.path.join(CSRC, "bandqr.h"))
+    impl = read(os.path.join(CSRC, "bandqr_impl.h"))
+    c = read(os.path.join(CSRC, "bandqr.c"))
+    c = c.replace('#include "bandqr.h"', "/* header inlined above */")
+    c = c.replace('#include "bandqr_impl.h"', impl)
+    return h + "\n" + c
+
+
+def strip_module(src, drop_docstring=True):
+    """Remove intra-package imports, __all__ blocks, and the module docstring."""
+    if drop_docstring:
+        src = re.sub(r'\A\s*(?:"""|\'\'\')(?:.|\n)*?(?:"""|\'\'\')\s*\n', "", src, count=1)
+    out = []
+    lines = src.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # __all__ = [...], possibly spanning lines
+        if re.match(r"^__all__\s*=\s*\[", line):
+            depth = line.count("[") - line.count("]")
+            i += 1
+            while depth > 0 and i < len(lines):
+                depth += lines[i].count("[") - lines[i].count("]")
+                i += 1
+            continue
+
+        # intra-package imports, possibly parenthesised across lines
+        if re.match(r"^\s*from \.", line):
+            indent = len(line) - len(line.lstrip())
+            depth = line.count("(") - line.count(")")
+            i += 1
+            while depth > 0 and i < len(lines):
+                depth += lines[i].count("(") - lines[i].count(")")
+                i += 1
+            if indent:      # a function-local import: the body still needs a stmt
+                out.append(" " * indent + "pass  # (intra-package import removed)")
+            continue
+
+        out.append(line)
+        i += 1
+    return "\n".join(out).rstrip() + "\n"
+
+
+def build_native_section():
+    """The ctypes binding, with library discovery swapped for self-compilation."""
+    src = read(os.path.join(PKG, "_native.py"))
+    src = strip_module(src)
+    # replace _candidates()/_load()/lib = _load() with the embedded build
+    start = src.index("def _candidates(")
+    end = src.index("lib = _load()") + len("lib = _load()")
+    return src[:start] + "lib = ct.CDLL(_build())" + src[end:]
+
+
+PREAMBLE = '''"""bandqr -- self-contained banded / almost-banded QR (single file).
+
+Fast, deterministic banded and almost-banded QR: no pivoting, no LAPACK, no
+densifying.  The C kernel is embedded below and compiled on first import.
+
+    from bandqr_standalone import solve, factorize, BandQR, solve_batched
+    x = solve(A, b)                       # structure detected automatically
+
+Needs a C compiler (cc/clang/gcc) and numpy; scipy for the sparse and
+almost-banded helpers.  Set CC=... to choose a compiler and BANDQR_CACHE=...
+to choose the build directory.
+
+Everything the package does on the CPU is here, including the vectorised
+batched solver.  The Metal GPU backend is *not* -- install the real package
+(`pip install bandqr`) for that.
+
+Generated by tools/make_standalone.py -- edit the package, not this file.
 """
 import ctypes as ct
-import hashlib, os, platform, subprocess, sys, tempfile
+import glob
+import hashlib
+import os
+import platform
+import re
+import subprocess
+import sys
+import tempfile
+import warnings
+
 import numpy as np
 
 _C_SOURCE = r"""__CSRC__"""
 
+
 def _build():
+    """Compile the embedded C source once, caching by its hash."""
     tag = hashlib.sha1(_C_SOURCE.encode()).hexdigest()[:12]
-    cache = os.environ.get("BANDQR_CACHE") or os.path.join(tempfile.gettempdir(), "bandqr_build")
+    cache = os.environ.get("BANDQR_CACHE") or os.path.join(
+        tempfile.gettempdir(), "bandqr_build")
     os.makedirs(cache, exist_ok=True)
     extra = []
     if sys.platform == "darwin":
         ext, shared, arch = ".dylib", ["-dynamiclib"], ["-arch", platform.machine()]
-        # The Command Line Tools 'cc' often cannot find <stdlib.h> etc. without
-        # an explicit SDK path (unlike /usr/bin/cc, the xcrun shim).
+        # Command Line Tools 'cc' often cannot find <stdlib.h> without an
+        # explicit SDK path (unlike /usr/bin/cc, which is the xcrun shim).
         try:
-            sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+            sdk = subprocess.check_output(["xcrun", "--show-sdk-path"],
+                                          text=True).strip()
             if sdk:
                 extra = ["-isysroot", sdk]
         except Exception:
             pass
     elif sys.platform.startswith("linux"):
         ext, shared, arch = ".so", ["-shared"], []
-    else:
-        ext, shared, arch = ".dll", ["-shared"], []   # Windows/MSYS: untested
+    else:                                   # Windows: no pthreads, build serial
+        ext, shared, arch = ".dll", ["-shared"], []
+        extra = ["-DBANDQR_NO_THREADS"]
     lib = os.path.join(cache, "libbandqr_%s%s" % (tag, ext))
     if not os.path.exists(lib):
         src = os.path.join(cache, "bandqr_%s.c" % tag)
-        open(src, "w").write(_C_SOURCE)
+        with open(src, "w") as fh:
+            fh.write(_C_SOURCE)
         cc = (os.environ.get("CC") or "cc").split()
         cmd = cc + ["-O3", "-funroll-loops", "-ffp-contract=fast", "-fPIC",
                     "-pthread", *shared, *arch, *extra, "-o", lib, src]
@@ -72,10 +163,87 @@ def _build():
                                % (" ".join(cmd), proc.stderr))
     return lib
 
-_lib = ct.CDLL(_build())
 '''
 
-out = PREAMBLE.replace("__CSRC__", csrc) + body
-dest = os.path.join(HERE, "bandqr_standalone.py")
-open(dest, "w").write(out)
-print("wrote %s  (%d lines, %.0f KB)" % (dest, out.count("\n") + 1, len(out) / 1024))
+GPU_STUB = '''
+
+# The Metal backend is not part of the single-file build.  This stub keeps the
+# batched front end's dispatch working -- `backend="auto"` simply resolves to
+# numpy -- and explains itself if anyone asks for the GPU explicitly.
+class _GPUAbsent:
+    @staticmethod
+    def is_available():
+        return False
+
+    def __getattr__(self, name):
+        raise RuntimeError(
+            "the GPU backend is not included in bandqr_standalone.py; install "
+            "the full package (pip install bandqr) with mlx for Metal support, "
+            "or use backend='numpy' for a batched solve that runs anywhere."
+        )
+
+
+gpu = _GPUAbsent()
+'''
+
+SHIM = '''
+# The package modules refer to the binding layer as `_native.<name>`; in this
+# flattened file those names are already module-level, so a namespace view of
+# them keeps the module bodies byte-identical to the package sources.
+import types as _types
+
+_native = _types.SimpleNamespace(
+    lib=lib, has_threads=has_threads, suffix_for=suffix_for, ptr_for=ptr_for,
+    as_ptr=as_ptr, as_cptr=as_cptr, is_complex=is_complex, dtype_for=dtype_for,
+    LibraryNotFound=LibraryNotFound,
+)
+'''
+
+EPILOGUE = '''
+
+def gpu_available():
+    """False here: the single-file build ships the CPU paths only."""
+    return False
+
+
+__version__ = "__VERSION__"
+
+__all__ = [
+    "__version__",
+    "solve", "factorize", "METHODS", "solve_batched", "available_backends",
+    "BandQR", "LQ", "RideQR", "RideQRRect", "RideTauQR",
+    "CollapseQR", "CollapseColsQR", "CollapseBothQR", "BorderedQR",
+    "solve_ride", "solve_precond_rows", "solve_bordered",
+    "solve_with_tau_columns",
+    "detect_structure", "Structure", "StructureWarning",
+    "detect_recurrence", "recurrence_residual",
+    "build_preconditioner", "apply_preconditioner",
+    "iterative_refinement", "compensated_residual", "cond1_estimate", "condest",
+    "dense_to_band", "to_band", "band_to_dense", "band_transpose",
+    "band_matvec", "to_scipy_band", "from_scipy_band",
+    "has_threads", "LibraryNotFound", "gpu_available", "BatchedBandQR",
+]
+'''
+
+
+def main():
+    version = re.search(r'__version__ = "([^"]+)"',
+                        read(os.path.join(PKG, "__init__.py"))).group(1)
+
+    parts = [PREAMBLE.replace("__CSRC__", build_c_source()),
+             build_native_section(), SHIM, GPU_STUB]
+    for name in MODULES:
+        body = strip_module(read(os.path.join(PKG, name + ".py")))
+        parts.append(f"\n\n# {'=' * 70}\n# {name}.py\n# {'=' * 70}\n\n" + body)
+    parts.append(EPILOGUE.replace("__VERSION__", version))
+
+    out = "".join(parts)
+    dest = os.path.join(ROOT, "bandqr_standalone.py")
+    with open(dest, "w") as fh:
+        fh.write(out)
+    print("wrote %s  (%d lines, %.0f KB)"
+          % (dest, out.count("\n") + 1, len(out) / 1024))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,11 +1,17 @@
-"""Publication figures for the bandqr benchmarks (matplotlib -> PDFs in ./figures/).
+"""Publication figures for the bandqr paper (matplotlib -> PDFs in ./figures/).
 
-    python figures.py
+    python paper/make_figures.py
 
-bandqr-only figures (conditioning, bandwidth) are computed LIVE; the cross-tool
-comparisons (scaling, crossover, GPU) use the numbers measured in
-benchmarks.ipynb, recorded in DATA below -- rerun that notebook to refresh them.
-Style: larger fonts, thicker lines, panels grouped when they share a story.
+bandqr-only figures (conditioning, bandwidth) are computed LIVE against the
+current library.  The cross-tool comparisons (scaling, crossover, GPU) use
+numbers recorded in DATA below.
+
+PROVENANCE: those recorded numbers were measured by the Dedalus/ApproxFun
+comparison notebook, which now lives in archive/dedalus/benchmarks.ipynb -- the
+library itself no longer depends on Dedalus.  Re-run that notebook in an
+environment that has Dedalus and Julia to refresh them, and note that the GPU
+row predates the rewritten Metal backend, so bench/bench_gpu.py is the current
+authority on GPU numbers.
 """
 import os, time
 import numpy as np
@@ -13,7 +19,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter, NullFormatter, FixedLocator
 
-OUT = "figures"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUT, exist_ok=True)
 
 mpl.rcParams.update({
@@ -93,6 +99,9 @@ def fig_conditioning():
     Ns = [256, 512, 1024, 2048, 4096, 8192, 16384]
     try:
         import scipy.sparse.linalg as spla
+        import sys, os as _os
+        sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), 'src'))
         from bandqr import solve_ride, solve_precond_rows
         rng = np.random.default_rng(0); ride, coll = [], []
         for n in Ns:
