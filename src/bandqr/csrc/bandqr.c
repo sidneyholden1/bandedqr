@@ -3,9 +3,12 @@
 #include <string.h>
 #include <math.h>
 #include <complex.h>
-#include <pthread.h>
-#include <stdatomic.h>
-#include <unistd.h>
+#include <limits.h>
+
+#ifndef BANDQR_NO_THREADS
+#  include <pthread.h>
+#  include <stdatomic.h>
+#endif
 
 /* Band buffer layout, per row i:
  *   offset 0      .. kl-1        subdiagonals  (columns i-kl .. i-1)
@@ -34,6 +37,27 @@ static inline int ilast_of(int jcol, int kl, int m)
     int v = jcol + kl;
     return v < m - 1 ? v : m - 1;
 }
+
+#ifndef BANDQR_NO_THREADS
+/* Wavefront progress markers, one per column.  Padded to a full cache line:
+ * adjacent columns are worked by *different* threads, so packing these into one
+ * line makes every publish invalidate every neighbour's copy.  Apple silicon
+ * uses 128-byte lines; 128 is a safe upper bound elsewhere too. */
+#define BANDQR_LINE 128
+typedef struct {
+    _Atomic int v;
+    char pad[BANDQR_LINE - sizeof(_Atomic int)];
+} bandqr_front_t;
+
+/* Publish progress every CHUNK rotations rather than every rotation.  A stale
+ * (larger) value only ever *understates* progress, so consumers stay correct;
+ * the win is CHUNK-fold less cache-line ping-pong between adjacent columns. */
+#ifndef BANDQR_FRONT_CHUNK
+#define BANDQR_FRONT_CHUNK 8
+#endif
+#else
+typedef struct { int v; } bandqr_front_t;   /* unused without threads */
+#endif
 
 /* ---- float64 instantiation ---- */
 #define SCALAR double
@@ -64,3 +88,12 @@ static inline int ilast_of(int jcol, int kl, int m)
 #undef CONJ
 #undef ABS2
 #undef RE
+
+int bandqr_has_threads(void)
+{
+#ifdef BANDQR_NO_THREADS
+    return 0;
+#else
+    return 1;
+#endif
+}
