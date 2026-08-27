@@ -14,12 +14,19 @@ timestepping loop factors on the first step and replays ``Q^H`` and the
 back-substitution thereafter -- the same economics as the CPU path.
 
 **fp32 speed, float64 accuracy.**  Apple GPUs have no float64.  Rather than
-accept fp32 answers, the factorisation is fp32 and the *residual* is formed on
-the host in float64, so mixed-precision iterative refinement recovers full
-double accuracy in two or three cheap correction solves (valid while
-``cond(A) * 2^-24`` stays below one, i.e. up to ``cond ~ 1e7``).  Unified memory
-makes the round trip nearly free, and a float64 residual beats any compensated
-fp32 one, so that is where the residual is computed.
+accept fp32 answers, the factorisation is fp32 and the *residual* is formed in
+float64 against the original operator, so mixed-precision iterative refinement
+recovers full double accuracy in two or three cheap correction solves -- valid
+while ``cond(A) * 2^-24`` stays below one, i.e. up to ``cond ~ 1e7``.  Measured:
+``2e-7`` raw, ``5e-14`` after one correction.
+
+The residual is computed on the host, which profiling justifies but not for the
+reason you might expect: the device round trip is genuinely cheap on unified
+memory (~0.3 ms of a 8 ms step), while *forming* the residual was the expensive
+part, so it runs in the C kernel rather than in numpy (5.4 ms -> 1.8 ms at
+n=192, batch=4096).  It has to be the float64 band: refining against the fp32
+copy the GPU factored would converge to the fp32 matrix's answer and cap
+accuracy at the 1e-7 this exists to beat.
 
 **One compile.**  Kernels are cached on ``(kl, ku, dtype, variant)`` alone; ``n``,
 the batch size and the RHS count are runtime arguments.  Changing batch size
@@ -30,11 +37,12 @@ for the GPU; refinement puts the accuracy back.
 """
 import numpy as np
 
+from . import _native
 from ._band import band_matvec_batched
 
 __all__ = [
-    "is_available", "BatchedBandQR", "solve_batched", "solve_batched_shifted",
-    "GPUUnavailable", "clear_kernel_cache",
+    "is_available", "BatchedBandQR", "BatchedRideQR", "solve_batched",
+    "solve_batched_shifted", "GPUUnavailable", "clear_kernel_cache",
 ]
 
 
@@ -262,6 +270,91 @@ _COPY_B_TO_Y = """
         }
 """
 
+# --------------------------------------------------------------------------
+# Almost-banded ("ride") batched kernels.  M = B + U L, with the dense boundary
+# rows carried through the rotations as a rank-r update rather than sparsified
+# first, so R = Q^H M exactly.  L (the rows' out-of-band content) is shared
+# across the batch -- boundary conditions do not vary with the Fourier mode --
+# while the bulk B does.  RFILL is a compile-time constant so the running
+# low-rank accumulator lives in registers.
+# --------------------------------------------------------------------------
+
+_INIT_U = """
+    for (int i = 0; i < N; i++)
+        for (int t = 0; t < RFILL; t++) {
+            bool hit = (i == drows[t]);
+            SSTORE(U, ((ulong)i * (ulong)RFILL + (ulong)t) * bs + sd,
+                   hit ? SONE : SZERO);
+        }
+"""
+
+_FACTOR_AB_BODY = """
+    ulong k = 0;
+    for (int jc = 0; jc < N; jc++) {
+        int ilast = min(jc + KL, N - 1);
+        for (int q = ilast; q >= jc + 1; q--) {
+            int p = q - 1;
+            ulong ip = ((ulong)p * (ulong)W + (ulong)(jc - p + KL)) * bs + sd;
+            ulong iq = ((ulong)q * (ulong)W + (ulong)(jc - q + KL)) * bs + sd;
+            /* the true entries include the carried low-rank part */
+            SCALAR a = SLOAD(wab, ip), bb = SLOAD(wab, iq);
+            for (int t = 0; t < RFILL; t++) {
+                SCALAR ljc = SLOAD(Lmat, (ulong)t * (ulong)N + (ulong)jc);
+                a  = cadd(a,  cmul(SLOAD(U, ((ulong)p * (ulong)RFILL + (ulong)t) * bs + sd), ljc));
+                bb = cadd(bb, cmul(SLOAD(U, ((ulong)q * (ulong)RFILL + (ulong)t) * bs + sd), ljc));
+            }
+            float c; SCALAR sn;
+            givens(a, bb, c, sn);
+            int jmax = min(q + KUR, N - 1);
+            for (int j = jc; j <= jmax; j++) {
+                ulong jp = ((ulong)p * (ulong)W + (ulong)(j - p + KL)) * bs + sd;
+                ulong jq = ((ulong)q * (ulong)W + (ulong)(j - q + KL)) * bs + sd;
+                SCALAR ap = SLOAD(wab, jp), aq = SLOAD(wab, jq);
+                SSTORE(wab, jp, cadd(cscale(c, ap), cmul(sn, aq)));
+                SSTORE(wab, jq, csub(cscale(c, aq), cmul(cconj(sn), ap)));
+            }
+            for (int t = 0; t < RFILL; t++) {          /* U rides along */
+                ulong up = ((ulong)p * (ulong)RFILL + (ulong)t) * bs + sd;
+                ulong uq = ((ulong)q * (ulong)RFILL + (ulong)t) * bs + sd;
+                SCALAR u1 = SLOAD(U, up), u2 = SLOAD(U, uq);
+                SSTORE(U, up, cadd(cscale(c, u1), cmul(sn, u2)));
+                SSTORE(U, uq, csub(cscale(c, u2), cmul(cconj(sn), u1)));
+            }
+            cvals[k * bs + sd] = c;
+            SSTORE(svals, k * bs + sd, sn);
+            k++;
+        }
+    }
+"""
+
+# Back-substitution against R = R_band + U L: a banded sweep plus a running
+# r-vector g = sum_{j>i} L[:,j] x[j] carrying the low-rank fill.  One RHS at a
+# time so g stays in registers.
+_BACKSUB_AB = """
+    for (int t = 0; t < NRHS; t++) {
+        SCALAR g[RFILL];
+        for (int u = 0; u < RFILL; u++) g[u] = SZERO;
+        for (int i = N - 1; i >= 0; i--) {
+            int jhi = min(i + KUR, N - 1);
+            ulong wrow = (ulong)i * (ulong)W;
+            SCALAR acc = SLOAD(y, ((ulong)i * (ulong)NRHS + (ulong)t) * bs + sd);
+            for (int j = i + 1; j <= jhi; j++)
+                acc = csub(acc, cmul(SLOAD(wab, (wrow + (ulong)(j - i + KL)) * bs + sd),
+                                     SLOAD(x, ((ulong)j * (ulong)NRHS + (ulong)t) * bs + sd)));
+            SCALAR diag = SLOAD(wab, (wrow + (ulong)KL) * bs + sd);
+            for (int u = 0; u < RFILL; u++) {
+                SCALAR Uiu = SLOAD(U, ((ulong)i * (ulong)RFILL + (ulong)u) * bs + sd);
+                acc  = csub(acc, cmul(Uiu, g[u]));
+                diag = cadd(diag, cmul(Uiu, SLOAD(Lmat, (ulong)u * (ulong)N + (ulong)i)));
+            }
+            SCALAR xi = cdiv(acc, diag);
+            SSTORE(x, ((ulong)i * (ulong)NRHS + (ulong)t) * bs + sd, xi);
+            for (int u = 0; u < RFILL; u++)
+                g[u] = cadd(g[u], cmul(SLOAD(Lmat, (ulong)u * (ulong)N + (ulong)i), xi));
+        }
+    }
+"""
+
 _KERNELS = {}
 
 
@@ -270,16 +363,28 @@ def clear_kernel_cache():
     _KERNELS.clear()
 
 
-def _kernel(kind, kl, ku, cplx, shifted=False):
-    key = (kind, kl, ku, cplx, shifted)
+def _kernel(kind, kl, ku, cplx, shifted=False, rfill=0):
+    key = (kind, kl, ku, cplx, shifted, rfill)
     if key in _KERNELS:
         return _KERNELS[key]
     mx = _mx()
     header = _HEADER_CPLX if cplx else _HEADER_REAL
+    header += ("\n#define SONE float2(1.0f, 0.0f)\n" if cplx
+               else "\n#define SONE (1.0f)\n")
     pro = _PROLOGUE.format(KL=kl, KU=ku)
+    if rfill:
+        pro += f"    const int RFILL = {rfill};\n"
     load = _LOAD_BAND_SHIFTED if shifted else _LOAD_BAND
 
-    if kind == "factor":
+    if kind == "factor_ab":
+        inputs = ["ab", "Lmat", "drows", "dims"]
+        outputs = ["wab", "U", "cvals", "svals"]
+        src = pro + _LOAD_BAND + _INIT_U + _FACTOR_AB_BODY
+    elif kind == "solve_ab":
+        inputs = ["wab", "U", "Lmat", "cvals", "svals", "b", "dims"]
+        outputs = ["x", "y"]
+        src = pro + _COPY_B_TO_Y + _APPLY_QT + _BACKSUB_AB
+    elif kind == "factor":
         inputs = (["ab", "shifts", "dims"] if shifted else ["ab", "dims"])
         outputs = ["wab", "cvals", "svals"]
         src = pro + load + _FACTOR_BODY.replace("@STORE_ROT@", _STORE_ROT)
@@ -307,7 +412,8 @@ def _kernel(kind, kl, ku, cplx, shifted=False):
         raise ValueError(f"unknown kernel kind {kind!r}")
 
     kern = mx.fast.metal_kernel(
-        name=f"bandqr_{kind}_{kl}_{ku}_{'z' if cplx else 'd'}{'_sh' if shifted else ''}",
+        name=(f"bandqr_{kind}_{kl}_{ku}_{'z' if cplx else 'd'}"
+              f"{'_sh' if shifted else ''}{f'_r{rfill}' if rfill else ''}"),
         input_names=inputs,
         output_names=outputs,
         header=header,
@@ -458,17 +564,38 @@ class BatchedBandQR:
         return ab
 
     def residual(self, x, b):
-        """``b - A x`` in float64, against the operator as originally given."""
-        ab = self._dense_band()
+        """``b - A x`` in float64, against the operator as originally given.
+
+        Deliberately evaluated against the *float64* band rather than the fp32
+        copy the GPU factored: refining against the demoted operator would
+        converge to the fp32 matrix's solution and cap the accuracy at ~1e-7,
+        which is the whole thing this is trying to beat.
+
+        Runs in the C kernel, which accumulates each output row across all its
+        diagonals in one pass.  The equivalent numpy expression allocates an
+        ``(n, batch)`` temporary per diagonal and measured ~2.3x slower.
+        """
+        ab = np.ascontiguousarray(self._dense_band())
+        cplx = np.iscomplexobj(ab) or np.iscomplexobj(x) or np.iscomplexobj(b)
+        dt = np.complex128 if cplx else np.float64
         x = np.asarray(x)
         squeeze = x.ndim == 2
-        X = x[:, None, :] if squeeze else x
+        X = np.ascontiguousarray(x[:, None, :] if squeeze else x, dt)
         B = np.asarray(b)
-        B = B[:, None, :] if squeeze else B
-        out = np.empty_like(np.asarray(X, dtype=np.result_type(ab.dtype, X.dtype)))
+        B = np.ascontiguousarray(B[:, None, :] if squeeze else B, dt)
+        ab = np.ascontiguousarray(ab, dt)
+
+        w = self.kl + self.ku + 1
+        fn = getattr(_native.lib, "bandqr_band_residual_batched"
+                     + _native.suffix_for(cplx))
+        p = _native.ptr_for(cplx)
+        out = np.empty_like(X)
         for t in range(X.shape[1]):
-            out[:, t, :] = B[:, t, :] - band_matvec_batched(ab, self.kl, self.ku,
-                                                            X[:, t, :])
+            xt = np.ascontiguousarray(X[:, t, :])
+            bt = np.ascontiguousarray(B[:, t, :])
+            rt = np.empty_like(xt)
+            fn(p(ab), self.n, w, self.batch, self.kl, self.ku, p(xt), p(bt), p(rt))
+            out[:, t, :] = rt
         return out[:, 0, :] if squeeze else out
 
     # ---- the accurate solve ---------------------------------------------
@@ -571,6 +698,206 @@ def solve_batched_shifted(ab, shifts, b, kl, ku, refine=2, threadgroup=256,
     """
     F = BatchedBandQR(ab, kl, ku, shifts=shifts, threadgroup=threadgroup)
     return F.solve(b, refine=refine, return_info=return_info)
+
+
+class BatchedRideQR:
+    """Batched *almost*-banded QR on the GPU: banded bulk plus dense rows.
+
+    The shape a real spectral operator has -- a banded differential operator
+    plus a couple of dense boundary-condition rows -- for many modes at once.
+    The dense rows are carried through the rotations as a rank-r update rather
+    than sparsified away first, so ``R = Q^H M`` exactly.
+
+    The boundary rows are shared across the batch (they do not depend on the
+    Fourier mode) while the bulk varies, which is what makes this cheap: ``L``
+    is uploaded once as ``(r, n)``.
+
+    Parameters
+    ----------
+    ab : ndarray ``(n, kl+ku+1, batch)``
+        Band storage of the whole matrix, including the in-band part of the
+        dense rows.  ``kl`` must reach the dense rows -- see
+        :meth:`from_dense_rows`, which arranges that for you.
+    dense_rows : sequence of int
+        Row indices of the boundary rows, identical across the batch, each
+        ``<= kl`` so the rotations can reach them.
+    L : ndarray ``(r, n)``
+        The dense rows' *out-of-band* content only; in-band entries live in
+        ``ab`` and must be zero here.
+
+    Notes
+    -----
+    Accuracy behaves like the dense-banded path: fp32 factors refined against
+    float64 residuals.  Refinement needs the full operator, so pass
+    ``M_dense``/``M_sparse`` to :meth:`solve` or use :meth:`from_dense_rows`,
+    which retains what it needs.
+    """
+
+    def __init__(self, ab, kl, ku, dense_rows, L, threadgroup=256,
+                 _full_rows=None):
+        mx = _mx()
+        ab = np.asarray(ab)
+        L = np.asarray(L)
+        dr = np.asarray(dense_rows, dtype=np.int32).ravel()
+        if ab.ndim != 3:
+            raise ValueError("ab must have shape (n, kl+ku+1, batch)")
+        n, w, batch = ab.shape
+        if w != kl + ku + 1:
+            raise ValueError(f"band width must be kl+ku+1 = {kl+ku+1}, got {w}")
+        if dr.size == 0:
+            raise ValueError("BatchedRideQR needs at least one dense row; use "
+                             "BatchedBandQR for a purely banded batch")
+        if int(dr.max()) > kl:
+            raise ValueError(
+                f"dense rows must lie within kl of the top (max index "
+                f"{int(dr.max())} > kl={kl}); widen kl or use from_dense_rows")
+        if L.shape != (dr.size, n):
+            raise ValueError(f"L must have shape {(dr.size, n)}, got {L.shape}")
+
+        self.cplx = bool(np.issubdtype(ab.dtype, np.complexfloating)
+                         or np.issubdtype(L.dtype, np.complexfloating))
+        self.n, self.batch, self.kl, self.ku = n, batch, int(kl), int(ku)
+        self.rfill = int(dr.size)
+        self.W = 2 * self.kl + self.ku + 2
+        self.nrot = _nrot(self.n, self.kl)
+        self.threadgroup = int(threadgroup)
+        self.dense_rows = dr
+        self._ab_host, self._L_host = ab, L
+        self._full_rows = _full_rows            # for float64 residuals
+
+        comp = 2 if self.cplx else 1
+        dims = mx.array([n, batch, 1, 0], dtype=mx.int32)
+        kern = _kernel("factor_ab", self.kl, self.ku, self.cplx, rfill=self.rfill)
+        wab, U, cvals, svals = kern(
+            inputs=[mx.array(_flat32(ab, self.cplx)),
+                    mx.array(_flat32(L, self.cplx)),
+                    mx.array(dr.astype(np.int32)), dims],
+            output_shapes=[(n * self.W * batch * comp,),
+                           (n * self.rfill * batch * comp,),
+                           (self.nrot * batch,),
+                           (self.nrot * batch * comp,)],
+            output_dtypes=[mx.float32] * 4,
+            grid=(batch, 1, 1),
+            threadgroup=(min(self.threadgroup, batch), 1, 1),
+        )
+        mx.eval(wab, U, cvals, svals)
+        self._wab, self._U, self._cvals, self._svals = wab, U, cvals, svals
+        self._Lg = mx.array(_flat32(L, self.cplx))
+
+    @classmethod
+    def from_dense_rows(cls, bulk_ab, kl, ku, dense_rows, rows, threadgroup=256):
+        """Build from a banded bulk and the *full* dense boundary rows.
+
+        Handles the bookkeeping the raw constructor demands: widens ``kl`` far
+        enough for the rotations to reach the boundary rows, writes their
+        in-band entries into the band, and splits off the out-of-band remainder
+        as ``L``.
+
+        Parameters
+        ----------
+        bulk_ab : ndarray ``(n, kl+ku+1, batch)``
+            The banded bulk, with the dense rows' slots ignored.
+        rows : ndarray ``(r, n)``
+            The complete boundary rows.
+        """
+        bulk_ab = np.asarray(bulk_ab)
+        rows = np.atleast_2d(np.asarray(rows))
+        dr = np.asarray(dense_rows, dtype=int).ravel()
+        n, w, batch = bulk_ab.shape
+        kle = max(int(kl), int(dr.max()))
+        dt = np.result_type(bulk_ab.dtype, rows.dtype)
+
+        ab = np.zeros((n, kle + ku + 1, batch), dtype=dt)
+        ab[:, (kle - kl):(kle - kl) + w, :] = bulk_ab      # re-align for wider kl
+        L = np.array(rows, dtype=dt)
+        for t, i in enumerate(dr):
+            lo, hi = max(0, i - kle), min(n - 1, i + ku)
+            ab[i, :, :] = 0.0
+            ab[i, lo - i + kle:hi - i + kle + 1, :] = rows[t, lo:hi + 1][:, None]
+            L[t, lo:hi + 1] = 0.0                          # keep out-of-band only
+        return cls(ab, kle, ku, dr, L, threadgroup=threadgroup,
+                   _full_rows=(rows, dr))
+
+    def solve_fp32(self, b):
+        """One batched fp32 solve against the stored almost-banded factors."""
+        mx = _mx()
+        b = np.asarray(b)
+        squeeze = b.ndim == 2
+        B = b[:, None, :] if squeeze else b
+        n, nrhs, batch = B.shape
+        if n != self.n or batch != self.batch:
+            raise ValueError(f"b has (n={n}, batch={batch}) but the factorisation "
+                             f"is (n={self.n}, batch={self.batch})")
+        comp = 2 if self.cplx else 1
+        dims = mx.array([self.n, self.batch, nrhs, 0], dtype=mx.int32)
+        kern = _kernel("solve_ab", self.kl, self.ku, self.cplx, rfill=self.rfill)
+        x, _ = kern(
+            inputs=[self._wab, self._U, self._Lg, self._cvals, self._svals,
+                    mx.array(_flat32(B, self.cplx)), dims],
+            output_shapes=[(self.n * nrhs * self.batch * comp,)] * 2,
+            output_dtypes=[mx.float32, mx.float32],
+            grid=(self.batch, 1, 1),
+            threadgroup=(min(self.threadgroup, self.batch), 1, 1),
+        )
+        mx.eval(x)
+        out = _unflat(x, (self.n, nrhs, self.batch), self.cplx)
+        return out[:, 0, :] if squeeze else out
+
+    def residual(self, x, b):
+        """``b - M x`` in float64, band plus the dense rows put back."""
+        ab = np.ascontiguousarray(self._ab_host)
+        cplx = np.iscomplexobj(ab) or np.iscomplexobj(x) or np.iscomplexobj(b)
+        dt = np.complex128 if cplx else np.float64
+        x = np.asarray(x)
+        squeeze = x.ndim == 2
+        X = np.ascontiguousarray(x[:, None, :] if squeeze else x, dt)
+        B = np.asarray(b)
+        B = np.ascontiguousarray(B[:, None, :] if squeeze else B, dt)
+        ab = np.ascontiguousarray(ab, dt)
+        L = np.ascontiguousarray(self._L_host, dt)
+
+        w = self.kl + self.ku + 1
+        fn = getattr(_native.lib, "bandqr_band_residual_batched"
+                     + _native.suffix_for(cplx))
+        p = _native.ptr_for(cplx)
+        out = np.empty_like(X)
+        for t in range(X.shape[1]):
+            xt = np.ascontiguousarray(X[:, t, :])
+            bt = np.ascontiguousarray(B[:, t, :])
+            rt = np.empty_like(xt)
+            fn(p(ab), self.n, w, self.batch, self.kl, self.ku, p(xt), p(bt), p(rt))
+            # the band carries only the in-band part of the boundary rows; the
+            # out-of-band remainder is L, applied here as the rank-r correction
+            rt[self.dense_rows, :] -= L @ xt
+            out[:, t, :] = rt
+        return out[:, 0, :] if squeeze else out
+
+    def solve(self, b, refine=2, tol=1e-13, return_info=False):
+        """Solve and refine against float64 residuals; see
+        :meth:`BatchedBandQR.solve`."""
+        b = np.asarray(b)
+        dt = np.complex128 if self.cplx else np.float64
+        x = np.asarray(self.solve_fp32(b), dtype=dt)
+        bn = np.maximum(np.linalg.norm(b.reshape(self.n, -1), axis=0),
+                        np.finfo(float).tiny)
+        hist = []
+        for _ in range(int(refine)):
+            r = self.residual(x, b)
+            rel = float(np.max(np.linalg.norm(r.reshape(self.n, -1), axis=0) / bn))
+            hist.append(rel)
+            if rel <= tol:
+                break
+            x = x + self.solve_fp32(r)
+        if return_info:
+            r = self.residual(x, b)
+            hist.append(float(np.max(np.linalg.norm(r.reshape(self.n, -1), axis=0) / bn)))
+            return x, {"residual_history": hist}
+        return x
+
+    def __repr__(self):
+        return (f"<BatchedRideQR n={self.n} batch={self.batch} kl={self.kl} "
+                f"ku={self.ku} r={self.rfill} "
+                f"{'complex64' if self.cplx else 'float32'}>")
 
 
 def _solve_fused(ab, b, kl, ku, threadgroup=256):

@@ -43,6 +43,9 @@ void bandqr_solve_Rt_d(const band_qr_d *qr, const double *y, double *x);
 void bandqr_apply_P_d(const double *a, int p, const double *y, int n, double *x);
 void bandqr_band_matvec_d(const double *ab, int m, int n, int kl, int ku,
                           const double *x, double *y);
+void bandqr_band_residual_batched_d(const double *ab, int n, int w, int batch,
+                                    int kl, int ku, const double *x,
+                                    const double *b, double *r);
 void bandqr_get_R_d(const band_qr_d *qr, double *out);
 void bandqr_free_d(band_qr_d *qr);
 
@@ -64,6 +67,9 @@ void bandqr_solve_Rt_z(const band_qr_z *qr, const double _Complex *y, double _Co
 void bandqr_apply_P_z(const double _Complex *a, int p, const double _Complex *y, int n, double _Complex *x);
 void bandqr_band_matvec_z(const double _Complex *ab, int m, int n, int kl, int ku,
                           const double _Complex *x, double _Complex *y);
+void bandqr_band_residual_batched_z(const double _Complex *ab, int n, int w, int batch,
+                                    int kl, int ku, const double _Complex *x,
+                                    const double _Complex *b, double _Complex *r);
 void bandqr_get_R_z(const band_qr_z *qr, double _Complex *out);
 void bandqr_free_z(band_qr_z *qr);
 

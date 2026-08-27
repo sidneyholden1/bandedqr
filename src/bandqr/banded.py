@@ -10,12 +10,20 @@ from ._band import (band_matvec, band_norm1, band_transpose, to_band,
 __all__ = ["BandQR", "LQ", "auto_threads"]
 
 
-# Wavefront threading is only worth its synchronisation on bands wide enough for
-# the factorisation to be compute- rather than memory-bound.  Below this the
-# measured result is a slowdown, so `nthreads=0` (auto) stays serial; see
-# bench/bench_threads.py, which is what this threshold is calibrated from.
-_THREAD_MIN_KL = int(os.environ.get("BANDQR_THREAD_MIN_KL", "48"))
+# Wavefront threading only pays on bands wide enough for the factorisation to be
+# compute- rather than memory-bound.  Narrow-band QR streams the band from DRAM
+# and is limited by that, not by arithmetic, so extra threads buy nothing and
+# the cross-column synchronisation shows up as pure overhead.  Measured on an
+# M-series part (bench/bench_threads.py), 8 threads against serial:
+#
+#     kl=16   1.00x        kl=64    1.67x
+#     kl=32   1.00x        kl=96    2.28x
+#                          kl=128   2.78x
+#
+# so auto stays serial below kl=64.  Override with BANDQR_THREAD_MIN_KL.
+_THREAD_MIN_KL = int(os.environ.get("BANDQR_THREAD_MIN_KL", "64"))
 _THREAD_MIN_WORK = float(os.environ.get("BANDQR_THREAD_MIN_WORK", "5e7"))
+_THREAD_MAX = int(os.environ.get("BANDQR_THREAD_MAX", "8"))
 
 
 def auto_threads(n, kl, ku, requested=0):
@@ -33,7 +41,7 @@ def auto_threads(n, kl, ku, requested=0):
     work = float(n) * max(kl, 1) * (kl + ku + 1)
     if kl < _THREAD_MIN_KL or work < _THREAD_MIN_WORK:
         return 1
-    return min(4, max(1, (os.cpu_count() or 1)))
+    return max(1, min(_THREAD_MAX, os.cpu_count() or 1))
 
 
 class BandQR:

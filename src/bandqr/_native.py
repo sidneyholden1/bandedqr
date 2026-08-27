@@ -77,6 +77,8 @@ def _bind():
         f = fn("solve_Rt");         f.restype = None; f.argtypes = [_vp, arr, arr]
         f = fn("apply_P");          f.restype = None; f.argtypes = [arr, _int, arr, _int, arr]
         f = fn("band_matvec");      f.restype = None; f.argtypes = [arr, _int, _int, _int, _int, arr, arr]
+        f = fn("band_residual_batched"); f.restype = None
+        f.argtypes = [arr, _int, _int, _int, _int, _int, arr, arr, arr]
         f = fn("get_R");            f.restype = None; f.argtypes = [_vp, arr]
         f = fn("free");             f.restype = None; f.argtypes = [_vp]
     lib.bandqr_has_threads.restype = _int

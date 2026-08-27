@@ -649,6 +649,37 @@ void SUF(bandqr_band_matvec)(const SCALAR *ab, int m, int n, int kl, int ku,
     }
 }
 
+/* Batched banded residual: r = b - A x, for `batch` independent systems held in
+ * the batch-fastest layout the GPU backend uses -- ab[(i*w+o)*batch + s],
+ * x[i*batch + s].
+ *
+ * This is the accuracy half of the mixed-precision GPU path: the factorisation
+ * runs in fp32 on the GPU, and refinement is only worth anything if the
+ * residual is formed against the *original* float64 operator.  Doing it here
+ * rather than in numpy matters -- the obvious vectorised expression allocates a
+ * whole (n, batch) temporary per diagonal and lands well short of memory
+ * bandwidth.  Accumulating a row of the output across all its diagonals before
+ * moving on keeps that row in cache and touches each array exactly once. */
+void SUF(bandqr_band_residual_batched)(const SCALAR *ab, int n, int w, int batch,
+                                       int kl, int ku, const SCALAR *restrict x,
+                                       const SCALAR *restrict b,
+                                       SCALAR *restrict r)
+{
+    for (int i = 0; i < n; i++) {
+        SCALAR *restrict ri = &r[(size_t)i * batch];
+        const SCALAR *restrict bi = &b[(size_t)i * batch];
+        for (int s = 0; s < batch; s++) ri[s] = bi[s];
+        int olo = i - kl < 0 ? kl - i : 0;             /* clip to valid columns */
+        int ohi = i + ku > n - 1 ? kl + (n - 1 - i) : kl + ku;
+        for (int o = olo; o <= ohi; o++) {
+            int j = i - kl + o;
+            const SCALAR *restrict a = &ab[((size_t)i * w + o) * batch];
+            const SCALAR *restrict xj = &x[(size_t)j * batch];
+            for (int s = 0; s < batch; s++) ri[s] -= a[s] * xj[s];
+        }
+    }
+}
+
 void SUF(bandqr_get_R)(const struct SUF(band_qr) *qr, SCALAR *out)
 {
     int n = qr->n, kuR = qr->kuR, Wout = kuR + 1;
