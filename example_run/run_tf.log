@@ -1,0 +1,38 @@
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+<frozen importlib._bootstrap>:488: RuntimeWarning: mpi4py.MPI.Session size changed, may indicate binary incompatibility. Expected 32 from C header, got 40 from PyObject
+2026-07-01 22:29:33,426 subsystems 0/8 INFO :: Building subproblem matrices 1/63 (~2%) Elapsed: 0s, Remaining: 4s, Rate: 1.7e+01/s
+2026-07-01 22:29:33,932 subsystems 0/8 INFO :: Building subproblem matrices 7/63 (~11%) Elapsed: 1s, Remaining: 5s, Rate: 1.2e+01/s
+2026-07-01 22:29:34,522 subsystems 0/8 INFO :: Building subproblem matrices 14/63 (~22%) Elapsed: 1s, Remaining: 4s, Rate: 1.2e+01/s
+2026-07-01 22:29:35,108 subsystems 0/8 INFO :: Building subproblem matrices 21/63 (~33%) Elapsed: 2s, Remaining: 3s, Rate: 1.2e+01/s
+2026-07-01 22:29:35,695 subsystems 0/8 INFO :: Building subproblem matrices 28/63 (~44%) Elapsed: 2s, Remaining: 3s, Rate: 1.2e+01/s
+2026-07-01 22:29:36,290 subsystems 0/8 INFO :: Building subproblem matrices 35/63 (~56%) Elapsed: 3s, Remaining: 2s, Rate: 1.2e+01/s
+2026-07-01 22:29:36,874 subsystems 0/8 INFO :: Building subproblem matrices 42/63 (~67%) Elapsed: 4s, Remaining: 2s, Rate: 1.2e+01/s
+2026-07-01 22:29:37,481 subsystems 0/8 INFO :: Building subproblem matrices 49/63 (~78%) Elapsed: 4s, Remaining: 1s, Rate: 1.2e+01/s
+2026-07-01 22:29:38,073 subsystems 0/8 INFO :: Building subproblem matrices 56/63 (~89%) Elapsed: 5s, Remaining: 1s, Rate: 1.2e+01/s
+2026-07-01 22:29:38,673 subsystems 0/8 INFO :: Building subproblem matrices 63/63 (~100%) Elapsed: 5s, Remaining: 0s, Rate: 1.2e+01/s
+2026-07-01 22:29:39,162 __main__ 0/8 INFO :: Starting main loop
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   PID 88132 RUNNING AT M2GPQN7D69
+=   EXIT CODE: 11
+=   CLEANING UP REMAINING PROCESSES
+=   YOU CAN IGNORE THE BELOW CLEANUP MESSAGES
+===================================================================================
+YOUR APPLICATION TERMINATED WITH THE EXIT STRING: Segmentation fault: 11 (signal 11)
+This typically refers to a problem with your application.
+Please see the FAQ page for debugging suggestions

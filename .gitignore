@@ -1,0 +1,30 @@
+# build artifacts (rebuilt by `make` / self-compiled by the standalone)
+*.dylib
+*.so
+*.dll
+*.o
+__pycache__/
+*.pyc
+
+# standalone self-compile cache (BANDQR_CACHE / tmp)
+bandqr_build/
+build/
+
+# scratch
+.ipynb_checkpoints/
+
+# large simulation outputs / media (archived Dedalus-era artifacts, kept on disk
+# but not tracked -- they are outputs, not source)
+*.mp4
+*.h5
+*.png
+archive/**/frames*/
+archive/**/slices*/
+archive/media/
+
+# packaging / test artifacts
+*.egg-info/
+dist/
+.pytest_cache/
+.benchmarks/
+.ruff_cache/
