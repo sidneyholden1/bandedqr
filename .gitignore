@@ -28,3 +28,6 @@ dist/
 .pytest_cache/
 .benchmarks/
 .ruff_cache/
+
+# immutable cluster campaign control records (generated, never versioned)
+runs/

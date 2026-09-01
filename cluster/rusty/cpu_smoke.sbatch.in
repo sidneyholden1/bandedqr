@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=bq-cpu-smoke
+#SBATCH --account=ccb
+#SBATCH --partition=ccb
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=00:15:00
+#SBATCH --no-requeue
+#SBATCH --chdir=__BANDQR_SOURCE_DIR__
+#SBATCH --output=__BANDQR_RUN_DIR__/logs/slurm-%j.out
+#SBATCH --error=__BANDQR_RUN_DIR__/logs/slurm-%j.err
+
+set -euo pipefail
+umask 027
+
+readonly CAMPAIGN_ID=__BANDQR_CAMPAIGN_ID_SHELL__
+readonly RUN_DIR=__BANDQR_RUN_DIR_SHELL__
+readonly DATA_DIR=__BANDQR_DATA_DIR_SHELL__
+readonly SOURCE_DIR=__BANDQR_SOURCE_DIR_SHELL__
+readonly ENV_DIR=__BANDQR_ENV_DIR_SHELL__
+readonly SOURCE_COMMIT=__BANDQR_COMMIT_SHELL__
+readonly DEDALUS_PYTHON="/mnt/home/sholden/network_instability/dedalus_codex_handoff/.venv-dedalus305/bin/python"
+
+module reset || true
+module load modules/2.4-20250724 || true
+module load gcc/13.3.0 || true
+module load openmpi/5.0.6 || true
+module load python-mpi/3.12.9 || true
+module load fftw/mpi-3.3.10 || true
+module load hdf5/mpi-1.12.3 || true
+
+for required in \
+    gcc/13.3.0 \
+    openmpi/5.0.6 \
+    python-mpi/3.12.9 \
+    fftw/mpi-3.3.10 \
+    hdf5/mpi-1.12.3; do
+    if ! module is-loaded "${required}"; then
+        echo "failed to load ${required}" >&2
+        exit 1
+    fi
+done
+
+readonly BANDQR_PYTHON="${ENV_DIR}/bin/python"
+if [[ ! -x "${BANDQR_PYTHON}" ]]; then
+    echo "missing bandqr environment: ${BANDQR_PYTHON}" >&2
+    exit 1
+fi
+if [[ ! -x "${DEDALUS_PYTHON}" ]]; then
+    echo "missing read-only Dedalus environment: ${DEDALUS_PYTHON}" >&2
+    exit 1
+fi
+
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_MAX_THREADS=1
+export OMPI_MCA_pml=ob1
+export OMPI_MCA_btl=self,vader,tcp
+export MPI_PATH="${OPENMPI_ROOT}"
+export FFTW_PATH="${FFTW_ROOT}"
+export HDF5_DIR="${HDF5_ROOT}"
+
+if [[ -z "${SLURM_TMPDIR:-}" ]]; then
+    echo "SLURM_TMPDIR is not defined" >&2
+    exit 1
+fi
+if ! git -C "${SOURCE_DIR}" cat-file -e "${SOURCE_COMMIT}^{commit}"; then
+    echo "submitted source commit is unavailable: ${SOURCE_COMMIT}" >&2
+    exit 1
+fi
+readonly WORK_DIR="${SLURM_TMPDIR}/bandqr-${CAMPAIGN_ID}"
+mkdir -p "${WORK_DIR}"
+git -C "${SOURCE_DIR}" archive "${SOURCE_COMMIT}" | tar -xf - -C "${WORK_DIR}"
+readonly CONFIG="${WORK_DIR}/bench/paper/configs/cpu_smoke.json"
+export PYTHONPATH="${WORK_DIR}/src"
+
+"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/write_status.py" \
+    --output "${RUN_DIR}/status.json" \
+    --state RUNNING \
+    --message "correctness gate started"
+
+on_exit() {
+    local exit_code=$?
+    if [[ "${exit_code}" -ne 0 ]]; then
+        "${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/write_status.py" \
+            --output "${RUN_DIR}/status.json" \
+            --state FAIL \
+            --message "batch exited with code ${exit_code}" || true
+    fi
+}
+trap on_exit EXIT
+
+mkdir -p "${DATA_DIR}/build" "${DATA_DIR}/logs" "${DATA_DIR}/verification"
+module -t list 2> "${DATA_DIR}/modules.txt"
+
+cc -O2 -std=c11 -fPIC -Wall -Wextra -Werror -shared \
+    -o "${DATA_DIR}/build/libbandqr_strict.so" \
+    "${WORK_DIR}/src/bandqr/csrc/bandqr.c" -lpthread -lm \
+    > "${DATA_DIR}/logs/strict-build.log" 2>&1
+make -B -C "${WORK_DIR}" CC=cc PY="${BANDQR_PYTHON}" \
+    > "${DATA_DIR}/logs/package-build.log" 2>&1
+
+"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/capture_provenance.py" \
+    --output "${RUN_DIR}/provenance.json" \
+    --source "${SOURCE_DIR}" \
+    --environment "${ENV_DIR}" \
+    --expected-commit "${SOURCE_COMMIT}" \
+    --hash "${RUN_DIR}/submitted.slurm" \
+    --hash "${CONFIG}" \
+    --hash "${WORK_DIR}/src/bandqr/csrc/bandqr_impl.h"
+
+"${BANDQR_PYTHON}" -m pytest "${WORK_DIR}/tests" -q \
+    --junitxml="${DATA_DIR}/verification/pytest.xml" \
+    > "${DATA_DIR}/logs/pytest.log" 2>&1
+
+"${BANDQR_PYTHON}" "${WORK_DIR}/bench/paper/drivers/cpu_smoke.py" \
+    --config "${CONFIG}" \
+    --output "${DATA_DIR}/verification/cpu.json" \
+    > "${DATA_DIR}/logs/cpu-smoke.log" 2>&1
+
+"${DEDALUS_PYTHON}" "${WORK_DIR}/bench/paper/drivers/dedalus_smoke.py" \
+    --config "${CONFIG}" \
+    --output "${DATA_DIR}/verification/dedalus.json" \
+    > "${DATA_DIR}/logs/dedalus-smoke.log" 2>&1
+
+"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/aggregate_verification.py" \
+    --cpu "${DATA_DIR}/verification/cpu.json" \
+    --dedalus "${DATA_DIR}/verification/dedalus.json" \
+    --junit "${DATA_DIR}/verification/pytest.xml" \
+    --output "${RUN_DIR}/verification.json"
+
+"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/write_status.py" \
+    --output "${RUN_DIR}/status.json" \
+    --state PASS \
+    --message "correctness gate passed"
+
+echo "${CAMPAIGN_ID} ${SOURCE_COMMIT} PASS"

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "campaign_kind": "correctness",
+  "performance_measurement": false,
+  "seed": 20260901,
+  "required_backends": [
+    "cpu-c",
+    "cpu-numpy-batched"
+  ],
+  "declared_backends_not_scheduled": {
+    "metal-mlx": "implemented; requires an Apple Metal host",
+    "cuda-cupy": "planned; no implementation is claimed"
+  },
+  "banded_cases": [
+    {
+      "n": 1024,
+      "kl": 8,
+      "ku": 5,
+      "dtypes": ["float64", "complex128"],
+      "threads": [1, 8]
+    }
+  ],
+  "batched_cases": [
+    {
+      "n": 96,
+      "kl": 2,
+      "ku": 3,
+      "batch": 32,
+      "nrhs": 3,
+      "dtypes": ["float64", "complex128"]
+    }
+  ],
+  "almost_banded_cases": [
+    {
+      "n": 192,
+      "kl": 2,
+      "ku": 2,
+      "dense_rows": 2,
+      "dense_columns": 2,
+      "dtypes": ["float64", "complex128"]
+    }
+  ],
+  "dedalus_case": {
+    "basis": "Chebyshev",
+    "n": 128,
+    "operator": "dxx(u) - 5*u with two Dirichlet conditions and two tau fields"
+  },
+  "tolerances": {
+    "normalized_residual": 1e-10,
+    "batched_normalized_residual": 1e-10,
+    "dedalus_normalized_residual": 1e-9,
+    "dedalus_solution_difference": 1e-9
+  }
+}
