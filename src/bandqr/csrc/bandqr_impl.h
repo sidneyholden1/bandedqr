@@ -5,7 +5,8 @@
  *     SUF(x)   name mangling  (x##_d | x##_z)
  *     CONJ(x)  conjugate      (identity | conj)
  *     ABS2(x)  squared magnitude ((x)*(x) | re*re+im*im)
- * The driver also provides type-independent IDX(qr,i,j), cpu_relax(), ilast_of().
+ * The driver also provides type-independent IDX(qr,i,j), cpu_relax(),
+ * ilast_of(), and BANDQR_COLUMN_FN.
  * No include guard -- this header is meant to be included multiple times.
  *
  * Givens (unitary) rotation zeroing b:  [[c, s], [-conj(s), c]] [a;b] = [r;0],
@@ -67,8 +68,8 @@ static inline void SUF(apply_rotation)(SCALAR *restrict rp, SCALAR *restrict rq,
     }
 }
 
-static void SUF(run_column)(struct SUF(band_qr) *qr, int jcol, long off,
-                            bandqr_front_t *front)
+static BANDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
+                                             long off, bandqr_front_t *front)
 {
     int m = qr->m, n = qr->n, kl = qr->kl, kuR = qr->kuR, W = qr->W;
     SCALAR *band = qr->band;

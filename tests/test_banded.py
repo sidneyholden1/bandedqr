@@ -60,10 +60,11 @@ def test_householder_agrees_with_givens(rng, complex_):
 # ------------------------------------------------------------------ threading
 @pytest.mark.skipif(not has_threads(), reason="built with BANDQR_NO_THREADS")
 @pytest.mark.parametrize("nthreads", [2, 4, 8])
-def test_threaded_R_is_bit_identical(rng, nthreads):
+@pytest.mark.parametrize("complex_", DTYPES)
+def test_threaded_R_is_bit_identical(rng, nthreads, complex_):
     """The wavefront must not change the answer -- the factorisation is
     deterministic, and that is a headline property, so assert exact equality."""
-    ab = make_band_storage(rng, 4000, 8, 8)
+    ab = make_band_storage(rng, 4000, 8, 8, complex_)
     R1 = BandQR(ab, 8, 8, nthreads=1).R_band()
     Rn = BandQR(ab, 8, 8, nthreads=nthreads).R_band()
     assert np.array_equal(R1, Rn)

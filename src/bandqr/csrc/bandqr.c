@@ -10,6 +10,20 @@
 #  include <stdatomic.h>
 #endif
 
+/* The serial factoriser calls run_column with a constant NULL progress array,
+ * while pthread workers call it with a live one.  GCC's interprocedural cloning
+ * can otherwise produce two differently FMA-contracted complex kernels under
+ * -ffp-contract=fast.  Both are accurate, but their R factors differ by a few
+ * ulps, violating the serial/threaded bit-identity contract.  One shared code
+ * body also costs effectively nothing: there is only one call per column. */
+#if defined(__GNUC__) && !defined(__clang__)
+#  define BANDQR_COLUMN_FN __attribute__((noipa))
+#elif defined(__clang__)
+#  define BANDQR_COLUMN_FN __attribute__((noinline))
+#else
+#  define BANDQR_COLUMN_FN
+#endif
+
 /* Band buffer layout, per row i:
  *   offset 0      .. kl-1        subdiagonals  (columns i-kl .. i-1)
  *   offset kl                    the diagonal  (column i)
@@ -90,6 +104,8 @@ typedef struct { int v; } bandqr_front_t;   /* unused without threads */
 #undef CONJ
 #undef ABS2
 #undef RE
+
+#undef BANDQR_COLUMN_FN
 
 int bandqr_has_threads(void)
 {

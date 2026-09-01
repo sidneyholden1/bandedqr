@@ -118,6 +118,20 @@ void bandqr_free_z(band_qr_z *qr);
 #  include <stdatomic.h>
 #endif
 
+/* The serial factoriser calls run_column with a constant NULL progress array,
+ * while pthread workers call it with a live one.  GCC's interprocedural cloning
+ * can otherwise produce two differently FMA-contracted complex kernels under
+ * -ffp-contract=fast.  Both are accurate, but their R factors differ by a few
+ * ulps, violating the serial/threaded bit-identity contract.  One shared code
+ * body also costs effectively nothing: there is only one call per column. */
+#if defined(__GNUC__) && !defined(__clang__)
+#  define BANDQR_COLUMN_FN __attribute__((noipa))
+#elif defined(__clang__)
+#  define BANDQR_COLUMN_FN __attribute__((noinline))
+#else
+#  define BANDQR_COLUMN_FN
+#endif
+
 /* Band buffer layout, per row i:
  *   offset 0      .. kl-1        subdiagonals  (columns i-kl .. i-1)
  *   offset kl                    the diagonal  (column i)
@@ -183,7 +197,8 @@ typedef struct { int v; } bandqr_front_t;   /* unused without threads */
  *     SUF(x)   name mangling  (x##_d | x##_z)
  *     CONJ(x)  conjugate      (identity | conj)
  *     ABS2(x)  squared magnitude ((x)*(x) | re*re+im*im)
- * The driver also provides type-independent IDX(qr,i,j), cpu_relax(), ilast_of().
+ * The driver also provides type-independent IDX(qr,i,j), cpu_relax(),
+ * ilast_of(), and BANDQR_COLUMN_FN.
  * No include guard -- this header is meant to be included multiple times.
  *
  * Givens (unitary) rotation zeroing b:  [[c, s], [-conj(s), c]] [a;b] = [r;0],
@@ -245,8 +260,8 @@ static inline void SUF(apply_rotation)(SCALAR *restrict rp, SCALAR *restrict rq,
     }
 }
 
-static void SUF(run_column)(struct SUF(band_qr) *qr, int jcol, long off,
-                            bandqr_front_t *front)
+static BANDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
+                                             long off, bandqr_front_t *front)
 {
     int m = qr->m, n = qr->n, kl = qr->kl, kuR = qr->kuR, W = qr->W;
     SCALAR *band = qr->band;
@@ -892,7 +907,8 @@ void SUF(bandqr_get_R)(const struct SUF(band_qr) *qr, SCALAR *out)
  *     SUF(x)   name mangling  (x##_d | x##_z)
  *     CONJ(x)  conjugate      (identity | conj)
  *     ABS2(x)  squared magnitude ((x)*(x) | re*re+im*im)
- * The driver also provides type-independent IDX(qr,i,j), cpu_relax(), ilast_of().
+ * The driver also provides type-independent IDX(qr,i,j), cpu_relax(),
+ * ilast_of(), and BANDQR_COLUMN_FN.
  * No include guard -- this header is meant to be included multiple times.
  *
  * Givens (unitary) rotation zeroing b:  [[c, s], [-conj(s), c]] [a;b] = [r;0],
@@ -954,8 +970,8 @@ static inline void SUF(apply_rotation)(SCALAR *restrict rp, SCALAR *restrict rq,
     }
 }
 
-static void SUF(run_column)(struct SUF(band_qr) *qr, int jcol, long off,
-                            bandqr_front_t *front)
+static BANDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
+                                             long off, bandqr_front_t *front)
 {
     int m = qr->m, n = qr->n, kl = qr->kl, kuR = qr->kuR, W = qr->W;
     SCALAR *band = qr->band;
@@ -1586,6 +1602,8 @@ void SUF(bandqr_get_R)(const struct SUF(band_qr) *qr, SCALAR *out)
 #undef CONJ
 #undef ABS2
 #undef RE
+
+#undef BANDQR_COLUMN_FN
 
 int bandqr_has_threads(void)
 {
