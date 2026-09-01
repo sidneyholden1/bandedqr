@@ -101,7 +101,7 @@ readonly WORK_DIR
 mkdir -p "${WORK_DIR}"
 git -C "${SOURCE_DIR}" archive "${SOURCE_COMMIT}" | tar -xf - -C "${WORK_DIR}"
 readonly CONFIG="${WORK_DIR}/bench/paper/configs/cpu_smoke.json"
-export PYTHONPATH="${WORK_DIR}/src"
+export PYTHONPATH="${WORK_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 write_status RUNNING "correctness gate started"
 
