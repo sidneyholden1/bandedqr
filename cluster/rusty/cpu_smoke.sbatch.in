@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=bq-cpu-smoke
 #SBATCH --account=ccb
-#SBATCH --partition=ccb
+#SBATCH --partition=genx
+#SBATCH --qos=gen
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

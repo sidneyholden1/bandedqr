@@ -170,7 +170,8 @@ def main() -> int:
         "output_path": str(data_dir),
         "resources": {
             "account": "ccb",
-            "partition": "ccb",
+            "partition": "genx",
+            "qos": "gen",
             "nodes": 1,
             "tasks": 1,
             "cpus_per_task": 8,
