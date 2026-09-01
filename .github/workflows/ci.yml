@@ -6,104 +6,183 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: ${{ matrix.os }} / py${{ matrix.python }}
+    name: ${{ matrix.label }} / py${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python: ["3.9", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.9"
+            cc: gcc
+            label: linux-gcc
+          - os: ubuntu-latest
+            python: "3.12"
+            cc: gcc
+            label: linux-gcc
+          - os: ubuntu-latest
+            python: "3.12"
+            cc: clang
+            label: linux-clang
+          - os: macos-15
+            python: "3.12"
+            cc: clang
+            label: macos-arm64-clang
+    env:
+      CC: ${{ matrix.cc }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
+      - name: Environment
+        run: |
+          python -VV
+          uname -a
+          "${CC}" --version
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
+          python -m pip install -e ".[test]"
       - name: Test
-        run: pytest tests -q
-      # The GPU backend needs Metal, which CI runners do not expose; the NumPy
-      # batched backend is what actually gets exercised here, and it is the
-      # reference the GPU kernel is checked against locally.
+        run: python -m pytest tests -q
+      # The test dependency set does not install MLX. Metal correctness is a
+      # separate, provenance-rich local campaign; NumPy is exercised here as
+      # the backend-neutral reference on every runner.
       - name: Smoke-test the public API
         run: |
-          python -c "
-          import numpy as np, bandqr
-          print(bandqr.__version__, 'threads:', bandqr.has_threads(),
-                'backends:', bandqr.available_backends())
+          python - <<'PY'
+          import numpy as np
+          import bandqr
+
+          print(
+              bandqr.__version__,
+              "threads:", bandqr.has_threads(),
+              "backends:", bandqr.available_backends(),
+          )
           n = 200
-          A = (np.diag(np.full(n, 4.0)) + np.diag(np.ones(n-1), 1)
-               + np.diag(np.ones(n-1), -1))
+          A = (
+              np.diag(np.full(n, 4.0))
+              + np.diag(np.ones(n - 1), 1)
+              + np.diag(np.ones(n - 1), -1)
+          )
           b = np.ones(n)
           assert np.linalg.norm(A @ bandqr.solve(A, b) - b) < 1e-12
-          "
+          PY
 
   portability:
     name: serial build (no pthreads)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install --upgrade pip && pip install numpy scipy pytest
+      - run: python -m pip install --upgrade pip numpy scipy pytest
       - name: Build without threading support
         run: |
-          cc -O3 -funroll-loops -ffp-contract=fast -fPIC -Wall -Wextra -Werror \
-             -DBANDQR_NO_THREADS -shared -o src/bandqr/libbandqr.so \
-             src/bandqr/csrc/bandqr.c -lm
+          gcc -O3 -funroll-loops -ffp-contract=fast -fPIC -Wall -Wextra -Werror \
+              -DBANDQR_NO_THREADS -shared -o src/bandqr/libbandqr.so \
+              src/bandqr/csrc/bandqr.c -lm
       - name: Test
         run: |
-          python -c "
-          import sys; sys.path.insert(0, 'src')
-          import bandqr; assert not bandqr.has_threads()
-          print('serial build OK')
-          "
-          PYTHONPATH=src pytest tests -q
+          PYTHONPATH=src python - <<'PY'
+          import bandqr
+
+          assert not bandqr.has_threads()
+          print("serial build OK")
+          PY
+          PYTHONPATH=src python -m pytest tests -q
 
   warnings:
-    name: strict C build
+    name: strict C11 / ${{ matrix.cc }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    env:
+      CC: ${{ matrix.cc }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Compile with -Werror, threaded and serial, C11 pedantic
+      - uses: actions/checkout@v6
+      - name: Compile threaded and serial with warnings as errors
         run: |
-          set -e
+          set -euo pipefail
+          "${CC}" --version
           for extra in "" "-DBANDQR_NO_THREADS"; do
-            cc -std=c11 -pedantic -Wall -Wextra -Werror $extra \
-               -c src/bandqr/csrc/bandqr.c -o /dev/null
+            "${CC}" -std=c11 -pedantic -Wall -Wextra -Werror ${extra} \
+                -c src/bandqr/csrc/bandqr.c -o /dev/null
           done
-          echo "no warnings"
+
+  sanitizers:
+    name: AddressSanitizer + UndefinedBehaviorSanitizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip numpy scipy pytest
+      - name: Build instrumented C kernel
+        run: |
+          gcc -O1 -g -std=c11 -fPIC -fno-omit-frame-pointer \
+              -fsanitize=address,undefined -Wall -Wextra -Werror \
+              -shared -o src/bandqr/libbandqr.so \
+              src/bandqr/csrc/bandqr.c -lpthread -lm
+      - name: Test instrumented kernel
+        run: |
+          export LD_PRELOAD
+          LD_PRELOAD="$(gcc -print-file-name=libasan.so)"
+          ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 \
+          UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+          PYTHONPATH=src python -m pytest tests -q
 
   standalone:
     name: single-file build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install --upgrade pip && pip install numpy scipy
+      - run: python -m pip install --upgrade pip numpy scipy
       - name: Regenerate and check it is current
         run: |
           python tools/make_standalone.py
           git diff --exit-code bandqr_standalone.py \
             || (echo "bandqr_standalone.py is stale: re-run tools/make_standalone.py"; exit 1)
-      - name: Import and solve
+      - name: Import and solve outside the checkout
         run: |
-          cd /tmp && cp $GITHUB_WORKSPACE/bandqr_standalone.py .
-          python -c "
-          import numpy as np, bandqr_standalone as bq
+          cd /tmp
+          cp "${GITHUB_WORKSPACE}/bandqr_standalone.py" .
+          python - <<'PY'
+          import numpy as np
+          import bandqr_standalone as bq
+
           n = 300
-          A = (np.diag(np.full(n, 6.0)) + np.diag(np.ones(n-1), 1)
-               + np.diag(np.ones(n-1), -1))
+          A = (
+              np.diag(np.full(n, 6.0))
+              + np.diag(np.ones(n - 1), 1)
+              + np.diag(np.ones(n - 1), -1)
+          )
           b = np.random.default_rng(0).standard_normal(n)
-          for m in ('givens', 'householder', 'lq', 'lu'):
-              x = bq.solve(A, b, method=m)
-              assert np.linalg.norm(A @ x - b) / np.linalg.norm(b) < 1e-12, m
-          print('standalone OK')
-          "
+          for method in ("givens", "householder", "lq", "lu"):
+              x = bq.solve(A, b, method=method)
+              residual = np.linalg.norm(A @ x - b) / np.linalg.norm(b)
+              assert residual < 1e-12, method
+          print("standalone OK")
+          PY

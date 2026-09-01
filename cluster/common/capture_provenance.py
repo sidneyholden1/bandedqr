@@ -65,7 +65,9 @@ def atomic_json(path: Path, value: dict) -> None:
 
 def package_versions() -> dict:
     result = {}
-    for name in ("bandqr", "numpy", "scipy", "pytest", "dedalus", "mpi4py"):
+    for name in (
+        "bandqr", "numpy", "scipy", "pytest", "mlx", "dedalus", "mpi4py"
+    ):
         try:
             result[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -98,8 +100,15 @@ def main() -> int:
             "MKL_NUM_THREADS",
             "NUMEXPR_MAX_THREADS",
             "PYTHONPATH",
+            "BANDQR_LOCAL_DATA_ROOT",
+            "BANDQR_LIBRARY",
+            "BANDQR_THREAD_MIN_KL",
+            "BANDQR_THREAD_MIN_WORK",
+            "BANDQR_THREAD_MAX",
+            "BANDQR_CACHE",
         )
     }
+    is_macos = platform.system() == "Darwin"
     record = {
         "schema_version": 1,
         "kind": args.kind,
@@ -131,7 +140,26 @@ def main() -> int:
             ),
         },
         "compiler": command(["cc", "--version"]),
-        "cpu": command(["lscpu", "--json"]),
+        "cpu": (
+            {
+                "brand": command(["sysctl", "-n", "machdep.cpu.brand_string"]),
+                "model": command(["sysctl", "-n", "hw.model"]),
+                "logical_cpus": command(["sysctl", "-n", "hw.ncpu"]),
+                "memory_bytes": command(["sysctl", "-n", "hw.memsize"]),
+            }
+            if is_macos
+            else command(["lscpu", "--json"])
+        ),
+        "macos": (
+            {
+                "version": command(["sw_vers"]),
+                "metal_display_hardware": command(
+                    ["system_profiler", "SPDisplaysDataType", "-json"]
+                ),
+            }
+            if is_macos
+            else None
+        ),
         "slurm": command(["scontrol", "show", "job", "-dd", os.environ.get(
             "SLURM_JOB_ID", ""
         )]) if os.environ.get("SLURM_JOB_ID") else None,

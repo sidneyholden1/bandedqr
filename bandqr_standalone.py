@@ -3345,11 +3345,16 @@ import numpy as np
 
 
 def available_backends():
-    """Which batched backends can run here, most capable first."""
+    """Runnable public backend selectors, most capable first.
+
+    The returned identities are concrete enough for dispatch.  Reproducible
+    run records use the more specific implementation IDs ``metal-mlx`` and
+    ``cpu-numpy-batched``.
+    """
     out = []
     pass  # (intra-package import removed)
     if gpu.is_available():
-        out.append("gpu")
+        out.append("metal")
     out.append("numpy")
     return out
 
@@ -3505,9 +3510,11 @@ def solve_batched(ab, b, kl, ku, backend="auto", shifts=None, refine=2, **kwargs
         ``(n, kl+ku+1, batch)``, or ``(n, kl+ku+1)`` when ``shifts`` is given.
     b : ndarray
         ``(n, batch)`` or ``(n, nrhs, batch)``.
-    backend : {"auto", "gpu", "numpy"}
-        ``"auto"`` uses the GPU when MLX and Metal are available and the batch
-        is big enough to be worth the dispatch, else NumPy.
+    backend : {"auto", "metal", "numpy"}
+        ``"auto"`` uses Metal when MLX and a working Metal device are available
+        and the batch is big enough to be worth the dispatch, else NumPy.
+        ``"gpu"`` remains a compatibility alias for ``"metal"``.  ``"cuda"``
+        is reserved for the planned CUDA backend and is not yet implemented.
     shifts : ndarray, optional
         ``(batch,)`` per-system diagonal shift on a shared band.
     refine : int
@@ -3518,16 +3525,27 @@ def solve_batched(ab, b, kl, ku, backend="auto", shifts=None, refine=2, **kwargs
         pass  # (intra-package import removed)
         batch = (np.asarray(shifts).size if shifts is not None
                  else np.asarray(ab).shape[-1])
-        backend = "gpu" if (gpu.is_available() and batch >= 64) else "numpy"
+        backend = "metal" if (gpu.is_available() and batch >= 64) else "numpy"
     if backend == "gpu":
+        backend = "metal"
+    if backend == "metal":
         pass  # (intra-package import removed)
+        if not gpu.is_available():
+            raise gpu.GPUUnavailable(
+                "the Metal backend is not usable in this process; choose "
+                "backend='numpy' or run on a native Apple Metal session")
         if shifts is not None:
             return gpu.solve_batched_shifted(ab, shifts, b, kl, ku, refine=refine,
                                              **kwargs)
         return gpu.solve_batched(ab, b, kl, ku, refine=refine, **kwargs)
     if backend == "numpy":
         return BatchedBandQR(ab, kl, ku, shifts=shifts).solve(b)
-    raise ValueError(f"unknown backend {backend!r}; expected auto, gpu or numpy")
+    if backend == "cuda":
+        raise NotImplementedError(
+            "the CUDA backend is reserved but not implemented; use 'metal' "
+            "or 'numpy'")
+    raise ValueError(
+        f"unknown backend {backend!r}; expected auto, metal, numpy, or cuda")
 
 
 # ======================================================================

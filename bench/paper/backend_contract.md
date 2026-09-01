@@ -6,9 +6,13 @@ the concrete backend rather than using the ambiguous label `gpu`:
 | Backend ID | Status | Execution model |
 | --- | --- | --- |
 | `cpu-c` | implemented | one C factorisation per system |
-| `cpu-numpy-batched` | implemented | portable vectorisation over systems |
-| `metal-mlx` | implemented | one Metal thread per independent system |
-| `cuda-cupy` | planned | CUDA implementation behind the same batched API |
+| `cpu-numpy-batched` | implemented | public selector `numpy`; portable vectorisation over systems |
+| `metal-mlx` | implemented | public selector `metal`; one Metal thread per independent system |
+| `cuda-cupy` | planned | reserved selector `cuda`; not yet callable |
+
+The historical public selector `gpu` remains an alias for `metal`, but it is
+not a valid backend identity in a campaign record. Likewise, `auto` is a
+dispatch policy and must be resolved before provenance is written.
 
 All batched accelerator backends must accept the same logical inputs:
 

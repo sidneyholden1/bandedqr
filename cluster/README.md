@@ -29,3 +29,16 @@ The job atomically advances `status.json` from `SUBMITTED` to `RUNNING`, then to
 This gate allocates no accelerator and reports no performance measurements.
 Metal and CUDA performance campaigns should use the same manifest/status
 schema after their conformance gates exist.
+
+## Local Metal gate
+
+The first-class Metal correctness gate runs on a logged-in Apple host rather
+than through Slurm. It uses the same immutable manifest/status/provenance
+pattern and compares raw and refined results against byte-identical NumPy
+reference inputs:
+
+    ~/miniforge3/envs/dedalus3/bin/python \
+        cluster/local/run_backend_conformance.py
+
+See `cluster/local/README.md` for output paths and the portable NumPy mechanics
+check. This campaign deliberately contains no timing measurements.

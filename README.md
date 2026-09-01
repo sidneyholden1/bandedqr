@@ -136,7 +136,7 @@ no longer a constraint on where boundary rows sit.
 
 ---
 
-## GPU — batched solve
+## Metal GPU — batched solve
 
 `bandqr.solve_batched` solves **many independent same-shape systems at once** on
 the Apple GPU: one thread per system, pivot-free so every lane takes the same
@@ -146,11 +146,12 @@ mode means thousands of systems per timestep.
 
 ```python
 from bandqr import solve_batched
-X = solve_batched(ab, b, kl, ku)         # ab: (n, kl+ku+1, batch), b: (n, batch)
+X = solve_batched(ab, b, kl, ku, backend="metal")
+# ab: (n, kl+ku+1, batch), b: (n, batch)
 ```
 
-Measured on an **Apple M3 Max** (`bench/bench_gpu.py`), against a CPU loop over
-the batch:
+Preliminary best-of-N measurements on one **Apple M3 Max**
+(`bench/bench_gpu.py`), against a CPU loop over the batch:
 
 | n | kl | batch | CPU loop | GPU | speedup |
 |---|---|---|---|---|---|
@@ -171,11 +172,12 @@ so mixed-precision iterative refinement recovers full double accuracy:
 | 192 | 3 | 2.8e-07 | 1.1e-13 | 1.1e-13 |
 | 256 | 4 | 3.0e-07 | 1.8e-13 | 1.8e-13 |
 
-One correction step, and you are at double precision. This holds while
-`cond(A)·2⁻²⁴ < 1`, i.e. up to `cond ~ 1e7`; past that, refinement stalls and
-says so.
+For these well-conditioned examples, one correction step reaches double
+precision. Mixed-precision refinement is expected to converge while
+`cond(A)·2⁻²⁴ < 1`; the reproducible conformance campaign includes an explicit
+condition sweep and records the residual history rather than assuming success.
 
-### Also on the GPU
+### Also on Metal
 
 - **Factor once, solve many** — `BatchedBandQR` keeps the rotations; **2.9×**
   per subsequent solve versus re-factorising.
@@ -189,7 +191,7 @@ says so.
 - **One compile** — kernels are cached on `(kl, ku, dtype)` alone; `n`, batch
   size and RHS count are runtime arguments.
 
-### No GPU?
+### No Metal device?
 
 `solve_batched(..., backend="numpy")` is a vectorised host implementation that
 runs anywhere, works in float64 directly, and is what the GPU kernel is tested

@@ -18,8 +18,12 @@ pytest together.
 
 ```sh
 PY=~/miniforge3/envs/dedalus3/bin/python
-make && PYTHONPATH=src:tests $PY -m pytest tests -q     # 194 tests, <1s
+make && PYTHONPATH=src:tests $PY -m pytest tests -q     # 176 pass, 23 Metal-skip, <1s headless
 ```
+
+Metal requires a logged-in macOS session. A headless Codex or CI process can
+have MLX installed while Metal command-queue creation is unavailable; backend
+discovery performs an isolated evaluated-operation probe before advertising it.
 
 ## Commands
 
@@ -31,6 +35,7 @@ make bench-gpu       # GPU benchmarks
 make nothreads       # serial build (portability check), then re-run tests
 make standalone      # regenerate bandqr_standalone.py -- CI fails if stale
 pip install -e ".[test]"
+~/miniforge3/envs/dedalus3/bin/python cluster/local/run_backend_conformance.py
 ```
 
 ## Do not re-litigate these
@@ -91,11 +96,19 @@ If you want to change one, re-run the benchmark rather than reasoning about it.
 - **No licence.** Deferred deliberately. Until a LICENSE file exists the default
   is all-rights-reserved, so nobody else can legally use this. The `license`
   line in `pyproject.toml` is commented out with a note. This blocks publication.
-- **Project URLs in `pyproject.toml` are a guess** (`github.com/sidneyholden/bandqr`);
-  no git remote is configured and nothing has been pushed.
-- **CI is written but has never run.** Every benchmark number in `README.md` is
-  from one Apple M3 Max. Nothing has been validated on Linux or x86 — expect
-  friction in the universal2 macOS build flags and the setuptools extension
-  naming.
+- **Project URLs in `pyproject.toml` are a guess** (`github.com/sidneyholden/bandqr`).
+  The working copies synchronize through a private bare repository on Rusty;
+  no public GitHub account/repository has been selected.
+- **CI is written but has never run on GitHub.** It now covers GCC, Clang,
+  macOS arm64 CPU, a no-pthreads build, strict C warnings, ASan/UBSan, and the
+  standalone artifact, but activation awaits the public/private GitHub choice.
+- **Linux/x86-64 CPU correctness has been validated on Rusty.** The immutable
+  campaign `cpu-smoke-20260901T145809Z-0d256c5692` passed the portable suite,
+  deterministic real/complex threaded checks, six CPU cases, and a small
+  Dedalus 3.0.5 same-operator comparison. It is a correctness gate, not a
+  performance claim.
+- **Metal code exists but its publication-quality gate is still pending.** Run
+  `cluster/local/run_backend_conformance.py` from a logged-in Mac. README
+  benchmark numbers remain preliminary best-of-N measurements from one M3 Max.
 - `archive/` holds the superseded Dedalus integration. Nothing in `src/bandqr`
   imports it; see `archive/README.md`.

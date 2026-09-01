@@ -35,6 +35,11 @@ between calls no longer triggers a Metal recompile.
 Both float64 and complex128 inputs are accepted and demoted to fp32/complex64
 for the GPU; refinement puts the accuracy back.
 """
+from functools import lru_cache
+import importlib.util
+import subprocess
+import sys
+
 import numpy as np
 
 from . import _native
@@ -62,15 +67,37 @@ def _mx():
     return mx
 
 
+@lru_cache(maxsize=1)
 def is_available():
-    """True if MLX is importable and a Metal device is present."""
-    try:
-        mx = _mx()
-    except GPUUnavailable:
+    """True if this process can execute a trivial MLX operation on Metal.
+
+    ``mx.metal.is_available()`` can report a device in a headless or restricted
+    process that cannot actually create a command queue.  The tiny evaluated
+    allocation makes backend discovery an execution check instead of a device
+    enumeration check.  It runs in an isolated child because a failed MLX
+    device initialization can otherwise leave a noisy shutdown callback in the
+    caller.  The result is cached for the process lifetime.
+    """
+    if importlib.util.find_spec("mlx") is None:
         return False
     try:
-        return bool(mx.metal.is_available())
-    except Exception:                                # pragma: no cover
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import mlx.core as mx; "
+                    "assert mx.metal.is_available(); "
+                    "x = mx.zeros((1,), dtype=mx.float32); mx.eval(x)"
+                ),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):     # pragma: no cover
         return False
 
 

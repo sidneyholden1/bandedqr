@@ -65,6 +65,8 @@ def test_numpy_backend_shifted(rng):
 
 def test_available_backends_lists_numpy():
     assert "numpy" in available_backends()
+    assert ("metal" in available_backends()) == gpu_mod.is_available()
+    assert "gpu" not in available_backends()       # compatibility alias, not identity
 
 
 def test_bad_shapes_rejected(rng):
@@ -196,15 +198,36 @@ def test_gpu_ride_rejects_unreachable_rows(rng):
 
 
 # ------------------------------------------------------------- front end
-@pytest.mark.parametrize("backend", ["numpy"] + (["gpu"] if gpu_mod.is_available()
-                                                 else []))
+@pytest.mark.parametrize("backend", ["numpy"] + (["metal"] if gpu_mod.is_available()
+                                                   else []))
 def test_solve_batched_front_end(rng, backend):
     ab, b = make_batch(rng, 64, 2, 2, 128)
     x = solve_batched(ab, b, 2, 2, backend=backend, refine=3)
     assert batch_relerr(ab, 2, 2, x, b) < 1e-10
 
 
+@needs_gpu
+def test_solve_batched_legacy_gpu_alias(rng):
+    ab, b = make_batch(rng, 32, 1, 1, 64)
+    got = solve_batched(ab, b, 1, 1, backend="gpu", refine=3)
+    want = solve_batched(ab, b, 1, 1, backend="metal", refine=3)
+    assert np.array_equal(got, want)
+
+
+def test_solve_batched_rejects_unimplemented_cuda(rng):
+    ab, b = make_batch(rng, 16, 1, 1, 8)
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        solve_batched(ab, b, 1, 1, backend="cuda")
+
+
+def test_solve_batched_reports_unavailable_metal(rng, monkeypatch):
+    ab, b = make_batch(rng, 16, 1, 1, 8)
+    monkeypatch.setattr(gpu_mod, "is_available", lambda: False)
+    with pytest.raises(gpu_mod.GPUUnavailable, match="not usable"):
+        solve_batched(ab, b, 1, 1, backend="metal")
+
+
 def test_solve_batched_rejects_unknown_backend(rng):
     ab, b = make_batch(rng, 16, 1, 1, 8)
     with pytest.raises(ValueError, match="unknown backend"):
-        solve_batched(ab, b, 1, 1, backend="cuda")
+        solve_batched(ab, b, 1, 1, backend="quantum")

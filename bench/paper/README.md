@@ -16,3 +16,10 @@ Files in `configs/` are immutable experiment definitions.  Drivers write raw
 machine-readable results to the campaign's Ceph directory.  The submission
 tool records the source commit and hashes the config and submitted batch script
 before Slurm accepts the job.
+
+`backend_conformance.json` is the backend-neutral accelerator gate. It covers
+ordinary, shifted, multi-RHS, factor-reuse, condition-sweep, real/complex, and
+dense-row/Ride cases. The NumPy implementation supplies the reference on
+identical matrix hashes; an accelerator record separates its raw arithmetic
+from mixed-precision refinement. The local control wrapper is documented in
+`cluster/local/README.md`.
