@@ -14,7 +14,6 @@ readonly POLICY=$4
 readonly RESERVED_CPUS=$5
 readonly MAX_NODES=$6
 readonly WALL_SECONDS=$7
-readonly CAMPAIGN_ROOT=/mnt/ceph/users/sholden/bandedqr/runs/rusty-scaling-20261108
 
 if [[ "${MODE}" != cpu && "${MODE}" != cuda ]]; then
     echo "unknown mode: ${MODE}" >&2
@@ -24,12 +23,13 @@ if [[ ! -d "${BUNDLE}" || ! -d "${OUTPUT}" || ! -f "${POLICY}" ]]; then
     echo "missing immutable bundle, output directory, or policy" >&2
     exit 2
 fi
-if [[ -z "${SLURM_JOB_ID:-}" || -z "${SLURM_TMPDIR:-}" ]]; then
-    echo "this launcher requires a Slurm job with SLURM_TMPDIR" >&2
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+    echo "this launcher requires a Slurm job" >&2
     exit 2
 fi
-if [[ ! -d "${SLURM_TMPDIR}" || ! -w "${SLURM_TMPDIR}" ]]; then
-    echo "SLURM_TMPDIR is unavailable: ${SLURM_TMPDIR}" >&2
+readonly SCRATCH_BASE="${SLURM_TMPDIR:-/tmp}"
+if [[ ! -d "${SCRATCH_BASE}" || ! -w "${SCRATCH_BASE}" ]]; then
+    echo "local scratch is unavailable: ${SCRATCH_BASE}" >&2
     exit 2
 fi
 
@@ -44,11 +44,25 @@ if [[ "${MODE}" == cuda ]]; then
     module load cuda/13.3.0
 fi
 
-readonly CACHE_ROOT="${CAMPAIGN_ROOT}/job_caches/${SLURM_JOB_ID}"
-mkdir -p "${CACHE_ROOT}/xdg" "${CACHE_ROOT}/matplotlib" "${OUTPUT}/logs"
+readonly WORK_ROOT="$(
+    mktemp -d "${SCRATCH_BASE%/}/bandedqr-${SLURM_JOB_ID}.XXXXXX"
+)"
+readonly SOURCE="${WORK_ROOT}/source"
+readonly CACHE_ROOT="${WORK_ROOT}/cache"
+cleanup_work_root() {
+    rm -rf -- "${WORK_ROOT}"
+}
+trap cleanup_work_root EXIT
+
+mkdir -p \
+    "${SOURCE}" \
+    "${CACHE_ROOT}/xdg" \
+    "${CACHE_ROOT}/matplotlib" \
+    "${WORK_ROOT}/tmp" \
+    "${OUTPUT}/logs"
 export XDG_CACHE_HOME="${CACHE_ROOT}/xdg"
 export MPLCONFIGDIR="${CACHE_ROOT}/matplotlib"
-export TMPDIR="${SLURM_TMPDIR}"
+export TMPDIR="${WORK_ROOT}/tmp"
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
@@ -68,9 +82,6 @@ BANDEDQR_BUNDLE_MANIFEST_SHA256="$(
     sha256sum "${BUNDLE}/manifest.json" | cut -d' ' -f1
 )"
 
-readonly WORK_ROOT="${SLURM_TMPDIR}/bandedqr-${SLURM_JOB_ID}"
-readonly SOURCE="${WORK_ROOT}/source"
-mkdir -p "${SOURCE}"
 sha256sum --check "${BUNDLE}/source.tar.sha256"
 tar -xf "${BUNDLE}/source.tar" -C "${SOURCE}"
 
@@ -118,8 +129,12 @@ cleanup_monitor() {
         wait "${monitor_pid}" 2>/dev/null || true
     fi
 }
+cleanup_all() {
+    cleanup_monitor
+    cleanup_work_root
+}
 trap forward_checkpoint USR1 TERM
-trap cleanup_monitor EXIT
+trap cleanup_all EXIT
 
 python "${SOURCE}/bench/paper/drivers/scaling.py" \
     --mode "${MODE}" \

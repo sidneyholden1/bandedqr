@@ -1,8 +1,10 @@
 """Control-plane tests that never contact Slurm or FI quota services."""
 
 import importlib.util
+from datetime import datetime
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -60,3 +62,24 @@ def test_terminal_state_is_conservative():
     assert control.terminal_state("FAILED+")
     assert not control.terminal_state("PENDING")
     assert not control.terminal_state("RUNNING")
+
+
+def test_sacct_timestamp_uses_cluster_local_time():
+    epoch = 1_794_165_393.0
+    assert control.slurm_local_timestamp(epoch) == datetime.fromtimestamp(
+        epoch
+    ).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def test_rusty_launcher_accepts_standard_tmp_fallback():
+    launcher = RUSTY / "run_scaling.sh"
+    syntax = subprocess.run(
+        ["bash", "-n", str(launcher)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert syntax.returncode == 0, syntax.stderr
+    source = launcher.read_text()
+    assert 'SCRATCH_BASE="${SLURM_TMPDIR:-/tmp}"' in source
+    assert 'mktemp -d "${SCRATCH_BASE%/}/bandedqr-${SLURM_JOB_ID}.XXXXXX"' in source

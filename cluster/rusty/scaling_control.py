@@ -31,6 +31,11 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def slurm_local_timestamp(epoch: float) -> str:
+    """Format an epoch in the scheduler's local timezone for ``sacct``."""
+    return datetime.fromtimestamp(epoch).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def command(arguments: list[str], cwd: Path = ROOT) -> str:
     result = subprocess.run(
         arguments,
@@ -374,9 +379,7 @@ def reconcile(job_id: str) -> None:
             raise ValueError("accounting queries must be at least 60 seconds apart")
         row["last_accounting_query_epoch"] = now
         atomic_json(ledger_path, ledger)
-        start = datetime.fromtimestamp(
-            float(row["reserved_epoch"]) - 60, timezone.utc
-        ).strftime("%Y-%m-%dT%H:%M:%S")
+        start = slurm_local_timestamp(float(row["reserved_epoch"]) - 60)
     raw = command(
         [
             "sacct",
