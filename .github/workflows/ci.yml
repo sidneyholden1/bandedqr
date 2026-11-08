@@ -22,7 +22,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Python 3.9 is not published for the Ubuntu 26.04 runner currently
+          # behind ubuntu-latest; pin its compatibility job to a supported OS.
+          - os: ubuntu-24.04
             python: "3.9"
             cc: gcc
             label: linux-gcc
