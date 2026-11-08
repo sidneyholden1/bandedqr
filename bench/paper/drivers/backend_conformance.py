@@ -203,8 +203,43 @@ def backend_metadata(selector: str) -> dict:
             "arithmetic": "float64/complex128",
             "numpy": np.__version__,
         }
+    if selector == "cuda":
+        from bandedqr import cuda
+
+        if not cuda.is_available():
+            raise cuda.CUDAUnavailable(
+                "CUDA conformance requested, but a trivial evaluated CuPy "
+                "operation cannot run in this process"
+            )
+        import cupy as cp
+
+        device = cp.cuda.Device()
+        properties = cp.cuda.runtime.getDeviceProperties(device.id)
+        name = properties["name"]
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", errors="replace")
+        return {
+            "selector": "cuda",
+            "implementation_id": "cuda-cupy",
+            "arithmetic": "float32/complex64 with host float64 refinement",
+            "numpy": np.__version__,
+            "cupy": cp.__version__,
+            "cuda_runtime": int(cp.cuda.runtime.runtimeGetVersion()),
+            "device_id": int(device.id),
+            "device_name": str(name),
+            "execution_probe": True,
+            "capabilities": [
+                "ordinary",
+                "shifted",
+                "multi_rhs",
+                "factor_reuse",
+                "conditioned",
+            ],
+        }
     if selector != "metal":
-        raise ValueError(f"unsupported selector {selector!r}; expected numpy or metal")
+        raise ValueError(
+            f"unsupported selector {selector!r}; expected numpy, metal, or cuda"
+        )
 
     from bandedqr import gpu
 
@@ -243,6 +278,10 @@ def make_factor(
 ):
     if selector == "numpy":
         return NumpyBatched(ab, kl, ku, shifts=shifts)
+    if selector == "cuda":
+        from bandedqr import cuda
+
+        return cuda.BatchedBandQR(ab, kl, ku, shifts=shifts)
     from bandedqr import gpu
 
     return gpu.BatchedBandQR(ab, kl, ku, shifts=shifts)
@@ -302,7 +341,7 @@ def evaluate_solve(
     refined_error = refined_metrics["max_relative_forward_error"]
     improvement = (
         float(raw_error / max(refined_error, np.finfo(float).tiny))
-        if selector == "metal"
+        if selector in {"metal", "cuda"}
         else 1.0
     )
     return {
@@ -556,7 +595,19 @@ def run(config: dict, selector: str, config_hash: str) -> dict:
                 }
                 checks.append(check)
 
-    for case in config["ride_cases"]:
+    skipped_families = []
+    ride_cases = config["ride_cases"]
+    if selector == "cuda":
+        skipped_families.append(
+            {
+                "family": "ride_dense_rows",
+                "reason": "cuda-cupy v1 implements the common purely banded contract; "
+                "the low-rank dense-row kernel is not yet implemented",
+                "configured_cases": len(ride_cases),
+            }
+        )
+        ride_cases = []
+    for case in ride_cases:
         for dtype_name in case["dtypes"]:
             dtype = np.dtype(dtype_name)
             rng = stable_rng(seed, "ride", case["id"], dtype_name)
@@ -638,6 +689,7 @@ def run(config: dict, selector: str, config_hash: str) -> dict:
         "backend": backend,
         "tolerances": config["tolerances"],
         "checks": checks,
+        "skipped_families": skipped_families,
         "summary": {
             "total": len(checks),
             "passed": passed,
@@ -649,7 +701,9 @@ def run(config: dict, selector: str, config_hash: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend", choices=["numpy", "metal"], required=True)
+    parser.add_argument(
+        "--backend", choices=["numpy", "metal", "cuda"], required=True
+    )
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

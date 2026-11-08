@@ -1,8 +1,8 @@
 """Batched banded QR: many independent same-shape systems at once.
 
 Backend-neutral front end.  The ``"metal"`` backend is implemented in
-:mod:`bandedqr.gpu` (with ``"gpu"`` retained as a compatibility alias); the
-``"numpy"`` backend here is a vectorised host
+:mod:`bandedqr.gpu` (with ``"gpu"`` retained as a compatibility alias), the
+``"cuda"`` backend in :mod:`bandedqr.cuda`, and the ``"numpy"`` backend here is a vectorised host
 implementation that runs everywhere, needs no MLX, and works in the input dtype
 (so float64 in, float64 out, with no refinement needed).
 
@@ -31,9 +31,11 @@ def available_backends():
     ``cpu-numpy-batched``.
     """
     out = []
-    from . import gpu
+    from . import cuda, gpu
     if gpu.is_available():
         out.append("metal")
+    if cuda.is_available():
+        out.append("cuda")
     out.append("numpy")
     return out
 
@@ -189,8 +191,8 @@ def solve_batched(ab, b, kl, ku, backend="auto", shifts=None, refine=2, **kwargs
         ``(n, kl+ku+1, batch)``, or ``(n, kl+ku+1)`` when ``shifts`` is given.
     b : ndarray
         ``(n, batch)`` or ``(n, nrhs, batch)``.
-    backend : {"auto", "metal", "numpy"}
-        ``"auto"`` uses Metal when MLX and a working Metal device are available
+    backend : {"auto", "metal", "cuda", "numpy"}
+        ``"auto"`` uses Metal or CUDA when a working accelerator is available
         and the batch is big enough to be worth the dispatch, else NumPy.
         ``"gpu"`` remains a compatibility alias for ``"metal"``.  ``"cuda"``
         is reserved for the planned CUDA backend and is not yet implemented.
@@ -201,10 +203,15 @@ def solve_batched(ab, b, kl, ku, backend="auto", shifts=None, refine=2, **kwargs
         already works in float64).
     """
     if backend == "auto":
-        from . import gpu
+        from . import cuda, gpu
         batch = (np.asarray(shifts).size if shifts is not None
                  else np.asarray(ab).shape[-1])
-        backend = "metal" if (gpu.is_available() and batch >= 64) else "numpy"
+        if batch >= 64 and gpu.is_available():
+            backend = "metal"
+        elif batch >= 64 and cuda.is_available():
+            backend = "cuda"
+        else:
+            backend = "numpy"
     if backend == "gpu":
         backend = "metal"
     if backend == "metal":
@@ -217,11 +224,19 @@ def solve_batched(ab, b, kl, ku, backend="auto", shifts=None, refine=2, **kwargs
             return gpu.solve_batched_shifted(ab, shifts, b, kl, ku, refine=refine,
                                              **kwargs)
         return gpu.solve_batched(ab, b, kl, ku, refine=refine, **kwargs)
+    if backend == "cuda":
+        from . import cuda
+        if not cuda.is_available():
+            raise cuda.CUDAUnavailable(
+                "the CUDA backend is not usable in this process; choose "
+                "backend='numpy' or run with CuPy on an NVIDIA GPU"
+            )
+        if shifts is not None:
+            return cuda.solve_batched_shifted(
+                ab, shifts, b, kl, ku, refine=refine, **kwargs
+            )
+        return cuda.solve_batched(ab, b, kl, ku, refine=refine, **kwargs)
     if backend == "numpy":
         return BatchedBandQR(ab, kl, ku, shifts=shifts).solve(b)
-    if backend == "cuda":
-        raise NotImplementedError(
-            "the CUDA backend is reserved but not implemented; use 'metal' "
-            "or 'numpy'")
     raise ValueError(
         f"unknown backend {backend!r}; expected auto, metal, numpy, or cuda")

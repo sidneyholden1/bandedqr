@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "campaign": "rusty_scaling",
+  "seed": 20261108,
+  "timing": {
+    "warmup": 2,
+    "samples": 9,
+    "minimum_sample_seconds": 0.08
+  },
+  "cpu": {
+    "kl": 4,
+    "ku": 4,
+    "sizes": [1024, 4096, 16384, 65536, 262144],
+    "methods": ["givens", "householder", "lapack_lu"],
+    "thread_case": {
+      "n": 32768,
+      "kl": 64,
+      "ku": 64,
+      "threads": [1, 2, 4, 8, 16, 32]
+    },
+    "reuse_case": {
+      "n": 65536,
+      "kl": 8,
+      "ku": 8,
+      "right_hand_sides": [1, 8, 32]
+    }
+  },
+  "cuda": {
+    "n": 256,
+    "kl": 4,
+    "ku": 4,
+    "batches": [64, 256, 1024, 4096, 16384],
+    "dtype": "float64",
+    "refinement_steps": 2,
+    "max_device_memory_fraction": 0.6
+  }
+}

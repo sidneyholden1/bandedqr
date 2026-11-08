@@ -3,12 +3,15 @@ import numpy as np
 import pytest
 
 from bandedqr import BandQR, available_backends, solve_batched
+from bandedqr import cuda as cuda_mod
 from bandedqr import gpu as gpu_mod
 from bandedqr.batched import BatchedBandQR as NumpyBatched
 from bandedqr._band import band_matvec_batched
 
 needs_gpu = pytest.mark.skipif(not gpu_mod.is_available(),
                                reason="no MLX/Metal device")
+needs_cuda = pytest.mark.skipif(not cuda_mod.is_available(),
+                                reason="no CuPy/CUDA device")
 
 
 def make_batch(rng, n, kl, ku, batch, complex_=False, nrhs=None):
@@ -66,6 +69,7 @@ def test_numpy_backend_shifted(rng):
 def test_available_backends_lists_numpy():
     assert "numpy" in available_backends()
     assert ("metal" in available_backends()) == gpu_mod.is_available()
+    assert ("cuda" in available_backends()) == cuda_mod.is_available()
     assert "gpu" not in available_backends()       # compatibility alias, not identity
 
 
@@ -165,6 +169,57 @@ def test_gpu_residual_matches_numpy(rng):
         assert np.allclose(F.residual(x, b), want, rtol=1e-10, atol=1e-12)
 
 
+# --------------------------------------------------------------------- CUDA
+@needs_cuda
+@pytest.mark.parametrize("complex_", [False, True])
+@pytest.mark.parametrize("nrhs", [None, 3])
+def test_cuda_matches_numpy_after_refinement(rng, complex_, nrhs):
+    ab, b = make_batch(rng, 64, 2, 3, 128, complex_, nrhs=nrhs)
+    reference = NumpyBatched(ab, 2, 3).solve(b)
+    factor = cuda_mod.BatchedBandQR(ab, 2, 3)
+    result = factor.solve(b, refine=3)
+    assert result.shape == reference.shape
+    assert np.abs(result - reference).max() / np.abs(reference).max() < 1e-9
+
+
+@needs_cuda
+@pytest.mark.parametrize("complex_", [False, True])
+def test_cuda_raw_answer_is_fp32_accurate(rng, complex_):
+    ab, b = make_batch(rng, 64, 2, 2, 128, complex_)
+    reference = NumpyBatched(ab, 2, 2).solve(b)
+    result = cuda_mod.BatchedBandQR(ab, 2, 2).solve_fp32(b)
+    relative = np.abs(result - reference).max() / np.abs(reference).max()
+    assert 1e-9 < relative < 1e-4
+
+
+@needs_cuda
+def test_cuda_shifted_matches_materialized(rng):
+    n, kl, ku, batch = 96, 2, 2, 256
+    base = rng.standard_normal((n, kl + ku + 1))
+    base[:, kl] += 8.0
+    shifts = np.linspace(0.5, 40.0, batch)
+    full = np.repeat(base[:, :, None], batch, axis=2)
+    full[:, kl, :] += shifts[None, :]
+    b = rng.standard_normal((n, batch))
+    reference = NumpyBatched(full, kl, ku).solve(b)
+    result = cuda_mod.solve_batched_shifted(
+        base, shifts, b, kl, ku, refine=3
+    )
+    assert np.abs(result - reference).max() / np.abs(reference).max() < 1e-9
+
+
+@needs_cuda
+def test_cuda_resident_solve_matches_host_solve(rng):
+    import cupy as cp
+
+    ab, b = make_batch(rng, 48, 2, 2, 96)
+    factor = cuda_mod.BatchedBandQR(ab, 2, 2)
+    device = factor.solve_fp32_device(cp.asarray(b))
+    host = factor.solve_fp32(b)
+    assert isinstance(device, cp.ndarray)
+    assert np.array_equal(cp.asnumpy(device), host)
+
+
 # ---------------------------------------------------- batched almost-banded
 @needs_gpu
 @pytest.mark.parametrize("r", [1, 2, 3])
@@ -198,8 +253,12 @@ def test_gpu_ride_rejects_unreachable_rows(rng):
 
 
 # ------------------------------------------------------------- front end
-@pytest.mark.parametrize("backend", ["numpy"] + (["metal"] if gpu_mod.is_available()
-                                                   else []))
+@pytest.mark.parametrize(
+    "backend",
+    ["numpy"]
+    + (["metal"] if gpu_mod.is_available() else [])
+    + (["cuda"] if cuda_mod.is_available() else []),
+)
 def test_solve_batched_front_end(rng, backend):
     ab, b = make_batch(rng, 64, 2, 2, 128)
     x = solve_batched(ab, b, 2, 2, backend=backend, refine=3)
@@ -214,9 +273,10 @@ def test_solve_batched_legacy_gpu_alias(rng):
     assert np.array_equal(got, want)
 
 
-def test_solve_batched_rejects_unimplemented_cuda(rng):
+def test_solve_batched_reports_unavailable_cuda(rng, monkeypatch):
     ab, b = make_batch(rng, 16, 1, 1, 8)
-    with pytest.raises(NotImplementedError, match="not implemented"):
+    monkeypatch.setattr(cuda_mod, "is_available", lambda: False)
+    with pytest.raises(cuda_mod.CUDAUnavailable, match="not usable"):
         solve_batched(ab, b, 1, 1, backend="cuda")
 
 

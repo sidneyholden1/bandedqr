@@ -8,7 +8,7 @@ the concrete backend rather than using the ambiguous label `gpu`:
 | `cpu-c` | implemented | one C factorisation per system |
 | `cpu-numpy-batched` | implemented | public selector `numpy`; portable vectorisation over systems |
 | `metal-mlx` | implemented | public selector `metal`; one Metal thread per independent system |
-| `cuda-cupy` | planned | reserved selector `cuda`; not yet callable |
+| `cuda-cupy` | implemented (purely banded v1) | public selector `cuda`; one CUDA thread per independent system |
 
 The historical public selector `gpu` remains an alias for `metal`, but it is
 not a valid backend identity in a campaign record. Likewise, `auto` is a
@@ -35,6 +35,8 @@ time from transfer-inclusive time and record warm-up/compilation separately.
 Device model, driver/runtime, backend version, batch size, and source commit
 are mandatory provenance.
 
-The present Metal implementation satisfies the algorithmic portion of this
-contract.  `cuda-cupy` remains a planned backend; campaign records must not
-represent it as implemented until the same conformance cases pass on Rusty.
+The Metal implementation additionally supports batched dense-row/Ride
+factorisations. The first CUDA implementation covers the common purely banded
+contract above; dense-row/Ride remains an explicitly reported unsupported
+family. Campaign records must not present CUDA as verified until its Rusty
+conformance run passes, and must retain that capability distinction.

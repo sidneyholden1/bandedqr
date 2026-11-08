@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "campaign_id": "rusty-scaling-20261108",
+  "objective": "Produce defensible CPU and CUDA scaling evidence, a timing table, and public README artifacts for bandedqr.",
+  "campaign_cpu_hour_ceiling": 100000,
+  "campaign_gpu_hour_ceiling": 4,
+  "nodes_per_job_ceiling": 1,
+  "max_simultaneous_nodes": 10,
+  "submission_authorized": false,
+  "concrete_allocations": {
+    "cpu": {
+      "partition": "ccb",
+      "account": "ccb",
+      "constraint": "genoa",
+      "nodes": 1,
+      "reserved_cpus": 96,
+      "numerical_cpus": 96,
+      "memory": "128G",
+      "walltime": "00:45:00",
+      "reserved_cpu_hours": 72,
+      "gpus": 0,
+      "reserved_gpu_hours": 0
+    },
+    "cuda": {
+      "partition": "gpu",
+      "account": "ccb",
+      "constraint": "h100-sxm5",
+      "nodes": 1,
+      "reserved_cpus": 16,
+      "numerical_cpus": 16,
+      "memory": "128G",
+      "walltime": "01:00:00",
+      "reserved_cpu_hours": 16,
+      "gpus": 1,
+      "reserved_gpu_hours": 1
+    }
+  },
+  "storage": {
+    "workspace": "/mnt/home/sholden/projects/bandedqr",
+    "ceph_root": "/mnt/ceph/users/sholden/bandedqr",
+    "campaign_root": "/mnt/ceph/users/sholden/bandedqr/runs/rusty-scaling-20261108",
+    "ledger": "/mnt/ceph/users/sholden/bandedqr/runs/rusty-scaling-20261108/control/ledger.json"
+  },
+  "quota_reserves": {
+    "cpu_hours": 50000,
+    "home_entries_below_soft_limit": 50000,
+    "ceph_entries_below_plan": 50000
+  },
+  "quota_monitor_interval_seconds": 300,
+  "checkpoint": "The scaling driver atomically records every completed case, handles SIGUSR1/SIGTERM, and exits 75 after a safe case boundary. The job launcher requests a Slurm pre-timeout signal and runs the tested quota monitor. No automatic resubmission is permitted.",
+  "accounting": "Reserve and reconcile the complete parent allocation. ccb CPU work reserves the full 96-CPU Genoa node; GPU work reserves requested CPUs and GPU wall hours.",
+  "policy_source": "/mnt/home/sholden/cluster/resource-defaults.json"
+}

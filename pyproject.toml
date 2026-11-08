@@ -28,9 +28,10 @@ dependencies = ["numpy>=1.21"]
 [project.optional-dependencies]
 sparse = ["scipy>=1.7"]
 gpu = ["mlx>=0.20"]
+cuda = ["cupy>=13"]
 test = ["pytest>=7", "scipy>=1.7"]
 bench = ["scipy>=1.7", "matplotlib>=3.5", "pandas>=1.3"]
-all = ["scipy>=1.7", "mlx>=0.20", "pytest>=7", "matplotlib>=3.5", "pandas>=1.3"]
+all = ["scipy>=1.7", "mlx>=0.20", "cupy>=13", "pytest>=7", "matplotlib>=3.5", "pandas>=1.3"]
 
 # Add verified project URLs when a hosting repository is selected.
 
