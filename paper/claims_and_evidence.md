@@ -45,13 +45,14 @@ by silently overwriting failures.
 | Threaded and serial Givens factorisations produce bit-identical `R` under the supported build settings. | **supported, scoped** | Rusty real/complex regression at 2, 4, and 8 threads after the GCC fix. | Add CI/compiler coverage and wider `n, kl, ku` campaign cases. |
 | The same small Dedalus operator can be solved accurately with `bandqr` and SuperLU. | **supported, scoped** | Rusty Dedalus smoke above. | Add representative Dedalus boundary-value and IVP workloads, setup/solve separation, and scaling. |
 | A Metal batched backend implements the same recurrence and supports real, complex, shifted, multi-RHS, refinement, reuse, and dense-row cases. | **implemented, evidence pending** | Source and skipped-on-non-Metal unit tests; preliminary development-machine runs. | Run the immutable local Metal conformance campaign and retain its provenance/output. |
+| A CUDA/CuPy batched backend supports real, complex, shifted, multi-RHS, refinement, and reuse cases. | **implemented, evidence pending** | Source, offline CUDA 13.3 compilation, optional device tests, and the shared backend contract; no completed device record yet. | Pass the immutable Rusty CUDA conformance campaign before making performance or cross-platform claims. |
 | Mixed precision recovers near-double-precision accuracy on useful problem classes. | **hypothesis with preliminary support** | Existing tests and development benchmarks; no condition-number sweep in an immutable campaign. | Measure raw and refined error versus actual conditioning for real/complex families, including stagnation/failure. |
 | Batched Metal execution is materially faster than CPU alternatives. | **hypothesis** | README numbers are preliminary, best-of-N measurements from one M3 Max. | Pre-register timing rules; compare transfer-inclusive and device-resident time with uncertainty across size/band/batch regimes. |
 | There is no serious existing banded-QR implementation serving these structured and accelerator use cases. | **hypothesis / literature claim** | Informal domain assessment only. | Systematic literature/software survey led by the authors; define “banded,” “QR,” “maintained,” and “accelerator” precisely. |
 | The recurrence or scheduling construction is novel. | **hypothesis / mathematical claim** | Implementation exists; novelty has not been established by repository evidence. | Coauthor derivation, prior-art search, precise theorem/algorithm statement, and appropriate citations or proof. |
 | The method is unconditionally backward stable. | **not supported** | No proof or campaign can establish this unqualified statement; no pivoting and mixed precision impose hypotheses. | Replace with a qualified theorem/citation or scoped empirical stability language. |
 | The implementation is suitable as a Dedalus backend. | **hypothesis with integration signal** | One same-operator smoke case and archived earlier integration work. | Agree an API with Dedalus maintainers; run realistic matrices and time assembly, factorisation, repeated solves, and memory. |
-| “GPU support” is general across major accelerator platforms. | **not yet true** | Metal/MLX is implemented; CUDA is not. | Implement the same backend contract on CUDA and pass Rusty GPU conformance before using platform-general wording. |
+| Accelerator support spans Apple Metal and NVIDIA CUDA. | **implemented, not yet verified across both devices** | Metal/MLX and CUDA/CuPy code paths exist; the frozen CUDA campaign has not run, and CUDA dense-row/Ride remains unsupported. | Pass retained conformance on both devices and state the capability difference explicitly. |
 
 ## Provisional manuscript language
 
@@ -77,8 +78,8 @@ programme.
    freshness, and sanitizers.
 3. Run a CPU scaling campaign over `n`, `kl`, `ku`, threads, dtype, and right-
    hand-side count; retain medians/distributions, not best-of-N alone.
-4. Implement CUDA under the same contract, then run correctness before any
-   Rusty GPU performance campaign.
+4. Pass CUDA conformance under the same contract before accepting any Rusty GPU
+   performance record.
 5. Select a small set of representative Dedalus problems with the coauthors
    and measure end-to-end effects as well as kernel timings.
 6. Compare against clearly configured dense QR, LAPACK banded alternatives

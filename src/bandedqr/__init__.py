@@ -7,10 +7,10 @@ end, plus a batched Metal backend for the many-independent-systems regime.
     >>> x = solve(A, b)          # structure detected, factorisation chosen
 
 Why QR rather than LU: the fill is *deterministic* -- ``ku + kl`` upper, always,
-with no pivoting and no value-dependent growth -- the factorisation is
-unconditionally backward stable, and for narrow bands it factors as fast as or
-faster than LAPACK's band LU.  A predictable, fast *factorisation* is the point:
-it makes re-factorising often (adaptive timestepping, parameter sweeps) cheap.
+with no pivoting and no value-dependent growth. A predictable factorization is
+useful when re-factorizing often (adaptive timestepping or parameter sweeps).
+Accuracy and performance still depend on the matrix and hardware; the package
+exposes residual, conditioning, and rank checks rather than assuming success.
 
 Main entry points
 -----------------
