@@ -13,8 +13,8 @@ import tempfile
 
 import numpy as np
 
-from bandqr import BandQR, RideTauQR, band_matvec, band_to_dense, solve_batched
-from bandqr._band import band_matvec_batched
+from bandedqr import BandQR, RideTauQR, band_matvec, band_to_dense, solve_batched
+from bandedqr._band import band_matvec_batched
 
 
 def atomic_json(path: Path, value: dict) -> None:

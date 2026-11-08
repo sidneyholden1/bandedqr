@@ -1,6 +1,6 @@
 """Band storage conversions and banded arithmetic.
 
-Storage convention throughout bandqr (row-major, "row-aligned"):
+Storage convention throughout bandedqr (row-major, "row-aligned"):
 
     ab[i, j - i + kl] == A[i, j]      for max(0, i-kl) <= j <= min(n-1, i+ku)
 

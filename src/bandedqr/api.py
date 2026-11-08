@@ -73,15 +73,15 @@ def factorize(A, method="auto", kl=None, ku=None, dense_rows=None,
         result as ``.P``.
     nthreads : int
         Banded factorisations only; ``0`` is auto (see
-        :func:`bandqr.banded.auto_threads`).
+        :func:`bandedqr.banded.auto_threads`).
 
     Returns
     -------
     object
-        :class:`~bandqr.banded.BandQR`, :class:`~bandqr.banded.LQ`,
-        :class:`~bandqr.almost.RideQR`, :class:`~bandqr.almost.RideTauQR`,
-        :class:`~bandqr.almost.CollapseQR` and friends, or
-        :class:`~bandqr.almost.BorderedQR`.
+        :class:`~bandedqr.banded.BandQR`, :class:`~bandedqr.banded.LQ`,
+        :class:`~bandedqr.almost.RideQR`, :class:`~bandedqr.almost.RideTauQR`,
+        :class:`~bandedqr.almost.CollapseQR` and friends, or
+        :class:`~bandedqr.almost.BorderedQR`.
     """
     if method not in METHODS:
         raise ValueError(f"method must be one of {METHODS}, got {method!r}")
@@ -144,7 +144,7 @@ def solve(A, b, method="auto", device="cpu", kl=None, ku=None,
         See the table above.
     device : {"cpu", "gpu"}
         ``"gpu"`` is not a single-system option -- the Metal backend exists to
-        run *many* systems at once.  Use :func:`bandqr.solve_batched`.
+        run *many* systems at once.  Use :func:`bandedqr.solve_batched`.
     refine : int
         Iterative-refinement steps against a compensated (double-double)
         residual.  ``0`` (the default) is right for a float64 factorisation of
@@ -164,8 +164,8 @@ def solve(A, b, method="auto", device="cpu", kl=None, ku=None,
     if device == "gpu":
         raise ValueError(
             "device='gpu' solves a *batch* of systems, not one.  Use "
-            "bandqr.solve_batched(ab, b, kl, ku) with band storage and a batch "
-            "axis; see bandqr.gpu.")
+            "bandedqr.solve_batched(ab, b, kl, ku) with band storage and a batch "
+            "axis; see bandedqr.gpu.")
     if method not in METHODS:
         raise ValueError(f"method must be one of {METHODS}, got {method!r}")
     if getattr(A, "ndim", None) != 2 or A.shape[0] != A.shape[1]:
@@ -195,7 +195,7 @@ def solve(A, b, method="auto", device="cpu", kl=None, ku=None,
         if not isinstance(F, BandQR):
             raise ValueError("refine= is implemented for purely banded systems; "
                              "for almost-banded ones refine by hand against "
-                             "bandqr.refine.iterative_refinement")
+                             "bandedqr.refine.iterative_refinement")
         ab = to_band(A, F.kl, F.ku)
         res = iterative_refinement(
             F.solve, lambda v: compensated_residual(ab, F.kl, F.ku, v, b),

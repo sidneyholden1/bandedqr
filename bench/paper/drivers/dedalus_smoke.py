@@ -13,7 +13,7 @@ import tempfile
 
 import numpy as np
 
-from bandqr import RideTauQR
+from bandedqr import RideTauQR
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -86,21 +86,21 @@ def main() -> int:
     dense_columns = np.array([n - 2, n - 1])
     rhs = np.random.default_rng(int(config["seed"])).standard_normal(n)
 
-    bandqr_factor = RideTauQR(
+    bandedqr_factor = RideTauQR(
         matrix, 0, 4, dense_rows, dense_columns
     )
-    bandqr_solution = bandqr_factor.solve(rhs)
+    bandedqr_solution = bandedqr_factor.solve(rhs)
     superlu_factor = solver.matsolver(matrix, solver)
     superlu_solution = superlu_factor.solve(rhs)
 
-    bandqr_residual = float(
-        np.linalg.norm(matrix @ bandqr_solution - rhs) / np.linalg.norm(rhs)
+    bandedqr_residual = float(
+        np.linalg.norm(matrix @ bandedqr_solution - rhs) / np.linalg.norm(rhs)
     )
     superlu_residual = float(
         np.linalg.norm(matrix @ superlu_solution - rhs) / np.linalg.norm(rhs)
     )
     solution_difference = float(
-        np.linalg.norm(bandqr_solution - superlu_solution)
+        np.linalg.norm(bandedqr_solution - superlu_solution)
         / np.linalg.norm(superlu_solution)
     )
     residual_tolerance = float(
@@ -110,7 +110,7 @@ def main() -> int:
         config["tolerances"]["dedalus_solution_difference"]
     )
     passed = bool(
-        max(bandqr_residual, superlu_residual) <= residual_tolerance
+        max(bandedqr_residual, superlu_residual) <= residual_tolerance
         and solution_difference <= difference_tolerance
     )
     result = {
@@ -122,7 +122,7 @@ def main() -> int:
         "matrix_shape": list(matrix.shape),
         "matrix_nnz": int(matrix.nnz),
         "matrix_sha256": sparse_hash(matrix),
-        "bandqr_normalized_residual": bandqr_residual,
+        "bandedqr_normalized_residual": bandedqr_residual,
         "superlu_normalized_residual": superlu_residual,
         "solution_relative_difference": solution_difference,
         "pass": passed,

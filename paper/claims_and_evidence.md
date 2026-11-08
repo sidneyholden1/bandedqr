@@ -18,8 +18,10 @@ The strongest current record is Rusty campaign
 `cpu-smoke-20260901T145809Z-0d256c5692` at commit
 `0d256c569283074a43c7d44fadd48f9510a4817b` (Slurm job `6971350`).  It ran on
 Linux/x86-64 with GCC using eight shared `genx` CPUs and 16 GB of memory.  Its
-immutable records live in `~/bandqr/runs/` and large output in
-`~/ceph/bandqr/` on Rusty.
+immutable records now live in `~/projects/bandedqr/runs/`; their original
+recorded source paths are preserved. Large output remains in `~/ceph/bandqr/`
+on Rusty. This pre-rename evidence was produced by `bandqr`, now named
+`bandedqr`; the records and retained figure PDFs have not been rewritten.
 
 That campaign reports 174 passing and 22 skipped tests, exact serial/threaded
 agreement for real and complex `R` at 2, 4, and 8 threads, and six CPU smoke

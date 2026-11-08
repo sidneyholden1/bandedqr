@@ -63,12 +63,12 @@ jobs:
         run: |
           python - <<'PY'
           import numpy as np
-          import bandqr
+          import bandedqr
 
           print(
-              bandqr.__version__,
-              "threads:", bandqr.has_threads(),
-              "backends:", bandqr.available_backends(),
+              bandedqr.__version__,
+              "threads:", bandedqr.has_threads(),
+              "backends:", bandedqr.available_backends(),
           )
           n = 200
           A = (
@@ -77,7 +77,7 @@ jobs:
               + np.diag(np.ones(n - 1), -1)
           )
           b = np.ones(n)
-          assert np.linalg.norm(A @ bandqr.solve(A, b) - b) < 1e-12
+          assert np.linalg.norm(A @ bandedqr.solve(A, b) - b) < 1e-12
           PY
 
   portability:
@@ -93,14 +93,14 @@ jobs:
       - name: Build without threading support
         run: |
           gcc -O3 -funroll-loops -ffp-contract=fast -fPIC -Wall -Wextra -Werror \
-              -DBANDQR_NO_THREADS -shared -o src/bandqr/libbandqr.so \
-              src/bandqr/csrc/bandqr.c -lm
+              -DBANDEDQR_NO_THREADS -shared -o src/bandedqr/libbandedqr.so \
+              src/bandedqr/csrc/bandedqr.c -lm
       - name: Test
         run: |
           PYTHONPATH=src python - <<'PY'
-          import bandqr
+          import bandedqr
 
-          assert not bandqr.has_threads()
+          assert not bandedqr.has_threads()
           print("serial build OK")
           PY
           PYTHONPATH=src python -m pytest tests -q
@@ -121,9 +121,9 @@ jobs:
         run: |
           set -euo pipefail
           "${CC}" --version
-          for extra in "" "-DBANDQR_NO_THREADS"; do
+          for extra in "" "-DBANDEDQR_NO_THREADS"; do
             "${CC}" -std=c11 -pedantic -Wall -Wextra -Werror ${extra} \
-                -c src/bandqr/csrc/bandqr.c -o /dev/null
+                -c src/bandedqr/csrc/bandedqr.c -o /dev/null
           done
 
   sanitizers:
@@ -140,8 +140,8 @@ jobs:
         run: |
           gcc -O1 -g -std=c11 -fPIC -fno-omit-frame-pointer \
               -fsanitize=address,undefined -Wall -Wextra -Werror \
-              -shared -o src/bandqr/libbandqr.so \
-              src/bandqr/csrc/bandqr.c -lpthread -lm
+              -shared -o src/bandedqr/libbandedqr.so \
+              src/bandedqr/csrc/bandedqr.c -lpthread -lm
       - name: Test instrumented kernel
         run: |
           export LD_PRELOAD
@@ -163,15 +163,15 @@ jobs:
       - name: Regenerate and check it is current
         run: |
           python tools/make_standalone.py
-          git diff --exit-code bandqr_standalone.py \
-            || (echo "bandqr_standalone.py is stale: re-run tools/make_standalone.py"; exit 1)
+          git diff --exit-code bandedqr_standalone.py \
+            || (echo "bandedqr_standalone.py is stale: re-run tools/make_standalone.py"; exit 1)
       - name: Import and solve outside the checkout
         run: |
           cd /tmp
-          cp "${GITHUB_WORKSPACE}/bandqr_standalone.py" .
+          cp "${GITHUB_WORKSPACE}/bandedqr_standalone.py" .
           python - <<'PY'
           import numpy as np
-          import bandqr_standalone as bq
+          import bandedqr_standalone as bq
 
           n = 300
           A = (

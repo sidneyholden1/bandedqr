@@ -66,7 +66,7 @@ def atomic_json(path: Path, value: dict) -> None:
 def package_versions() -> dict:
     result = {}
     for name in (
-        "bandqr", "numpy", "scipy", "pytest", "mlx", "dedalus", "mpi4py"
+        "bandedqr", "numpy", "scipy", "pytest", "mlx", "dedalus", "mpi4py"
     ):
         try:
             result[name] = importlib.metadata.version(name)
@@ -100,12 +100,12 @@ def main() -> int:
             "MKL_NUM_THREADS",
             "NUMEXPR_MAX_THREADS",
             "PYTHONPATH",
-            "BANDQR_LOCAL_DATA_ROOT",
-            "BANDQR_LIBRARY",
-            "BANDQR_THREAD_MIN_KL",
-            "BANDQR_THREAD_MIN_WORK",
-            "BANDQR_THREAD_MAX",
-            "BANDQR_CACHE",
+            "BANDEDQR_LOCAL_DATA_ROOT",
+            "BANDEDQR_LIBRARY",
+            "BANDEDQR_THREAD_MIN_KL",
+            "BANDEDQR_THREAD_MIN_WORK",
+            "BANDEDQR_THREAD_MAX",
+            "BANDEDQR_CACHE",
         )
     }
     is_macos = platform.system() == "Darwin"

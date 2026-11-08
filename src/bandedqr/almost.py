@@ -7,7 +7,7 @@ Two families, and the choice between them is the interesting part:
   ``R = Q^H M`` exactly, with no preconditioner, so nothing is done to the
   conditioning.
 * **collapse** (``Collapse*``) -- sparsify the dense rows into the band first,
-  using the recurrence they satisfy (see :mod:`bandqr.recurrence`), then do a
+  using the recurrence they satisfy (see :mod:`bandedqr.recurrence`), then do a
   single ordinary banded QR.  Faster, but the preconditioner is a similarity
   the conditioning has to pay for, and that cost grows with n.
 
@@ -66,7 +66,7 @@ class _RideBase:
                 L[t, lo:hi + 1] = 0                 # keep only out-of-band
         L = np.ascontiguousarray(L, self._dt)
         self._L = L
-        h = getattr(_native.lib, "bandqr_factor_ab" + self._suf)(
+        h = getattr(_native.lib, "bandedqr_factor_ab" + self._suf)(
             self._p(ab), m, n, kle, ku,
             dr.ctypes.data_as(ct.POINTER(ct.c_int)), r, self._p(L))
         if not h:
@@ -82,7 +82,7 @@ class _RideBase:
         nrhs = B.shape[1]
         X = np.zeros((self.n, nrhs), dtype=self._dt)
         res = np.zeros(nrhs, dtype=np.float64)
-        getattr(_native.lib, "bandqr_solve_many_ab" + self._suf)(
+        getattr(_native.lib, "bandedqr_solve_many_ab" + self._suf)(
             self._h, self._p(B), nrhs, self._p(X), _native.as_ptr(res))
         self.residual = res[0] if single else res
         return X[:, 0] if single else X
@@ -90,7 +90,7 @@ class _RideBase:
     def free(self):
         h = getattr(self, "_h", None)
         if h:
-            getattr(_native.lib, "bandqr_free" + self._suf)(h)
+            getattr(_native.lib, "bandedqr_free" + self._suf)(h)
             self._h = None
 
     def __del__(self):

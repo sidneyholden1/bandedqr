@@ -2,8 +2,8 @@
 import numpy as np
 import pytest
 
-import bandqr
-from bandqr import (METHODS, BandQR, BorderedQR, CollapseQR, LQ, RideQR,
+import bandedqr
+from bandedqr import (METHODS, BandQR, BorderedQR, CollapseQR, LQ, RideQR,
                     RideTauQR, factorize, solve)
 from conftest import make_almost_banded, make_banded, make_collapsible, relerr
 
@@ -125,13 +125,13 @@ def test_ride_without_dense_rows_names_the_alternative(rng):
 
 # ----------------------------------------------------------------- package
 def test_public_api_is_importable():
-    for name in bandqr.__all__:
-        assert hasattr(bandqr, name), name
+    for name in bandedqr.__all__:
+        assert hasattr(bandedqr, name), name
 
 
 def test_version_is_a_string():
-    assert isinstance(bandqr.__version__, str)
-    assert bandqr.__version__.count(".") >= 1
+    assert isinstance(bandedqr.__version__, str)
+    assert bandedqr.__version__.count(".") >= 1
 
 
 def test_repr_of_factorisations(rng):

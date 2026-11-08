@@ -3,7 +3,7 @@
 This directory contains versioned inputs and drivers for reproducible paper
 experiments.  Generated campaign records never belong here: they live in
 `runs/<campaign-id>/`, while detailed outputs live in
-`~/ceph/bandqr/<campaign-id>/` on Rusty.
+`~/ceph/bandedqr/<campaign-id>/` on Rusty.
 
 The first campaign is deliberately a correctness gate, not a performance run.
 It verifies the Linux C build, the complete portable test suite, deterministic

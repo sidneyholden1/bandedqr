@@ -64,22 +64,22 @@ def utc_now() -> str:
 def materialize(template: str, values: dict[str, str]) -> str:
     rendered = template
     raw_tokens = {
-        "__BANDQR_RUN_DIR__": values["run_dir"],
-        "__BANDQR_SOURCE_DIR__": values["source_dir"],
+        "__BANDEDQR_RUN_DIR__": values["run_dir"],
+        "__BANDEDQR_SOURCE_DIR__": values["source_dir"],
     }
     shell_tokens = {
-        "__BANDQR_CAMPAIGN_ID_SHELL__": values["campaign_id"],
-        "__BANDQR_RUN_DIR_SHELL__": values["run_dir"],
-        "__BANDQR_DATA_DIR_SHELL__": values["data_dir"],
-        "__BANDQR_SOURCE_DIR_SHELL__": values["source_dir"],
-        "__BANDQR_ENV_DIR_SHELL__": values["env_dir"],
-        "__BANDQR_COMMIT_SHELL__": values["commit"],
+        "__BANDEDQR_CAMPAIGN_ID_SHELL__": values["campaign_id"],
+        "__BANDEDQR_RUN_DIR_SHELL__": values["run_dir"],
+        "__BANDEDQR_DATA_DIR_SHELL__": values["data_dir"],
+        "__BANDEDQR_SOURCE_DIR_SHELL__": values["source_dir"],
+        "__BANDEDQR_ENV_DIR_SHELL__": values["env_dir"],
+        "__BANDEDQR_COMMIT_SHELL__": values["commit"],
     }
     for token, value in raw_tokens.items():
         rendered = rendered.replace(token, value)
     for token, value in shell_tokens.items():
         rendered = rendered.replace(token, shlex.quote(value))
-    leftovers = sorted(set(re.findall(r"__BANDQR_[A-Z_]+__", rendered)))
+    leftovers = sorted(set(re.findall(r"__BANDEDQR_[A-Z_]+__", rendered)))
     if leftovers:
         raise RuntimeError(f"unexpanded template tokens: {leftovers}")
     return rendered
@@ -98,10 +98,10 @@ def main() -> int:
     source = (args.source or default_source).resolve()
     runs_root = (args.runs_root or source / "runs").resolve()
     data_root = (
-        args.data_root or Path("/mnt/home/sholden/ceph/bandqr")
+        args.data_root or Path("/mnt/home/sholden/ceph/bandedqr")
     ).resolve()
     environment = (
-        args.environment or Path("/mnt/home/sholden/envs/bandqr/cpu")
+        args.environment or Path("/mnt/home/sholden/envs/bandedqr/cpu")
     ).resolve()
     config = source / "bench/paper/configs/cpu_smoke.json"
     template = source / "cluster/rusty/cpu_smoke.sbatch.in"

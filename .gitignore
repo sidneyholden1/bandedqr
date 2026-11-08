@@ -6,8 +6,8 @@
 __pycache__/
 *.pyc
 
-# standalone self-compile cache (BANDQR_CACHE / tmp)
-bandqr_build/
+# standalone self-compile cache (BANDEDQR_CACHE / tmp)
+bandedqr_build/
 build/
 
 # scratch

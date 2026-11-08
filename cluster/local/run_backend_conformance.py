@@ -126,11 +126,11 @@ def main() -> int:
         or source / "bench/paper/configs/backend_conformance.json"
     ).resolve()
     runs_root = (args.runs_root or source / "runs").resolve()
-    configured_data_root = os.environ.get("BANDQR_LOCAL_DATA_ROOT")
+    configured_data_root = os.environ.get("BANDEDQR_LOCAL_DATA_ROOT")
     data_root = (
         args.data_root
         or (Path(configured_data_root) if configured_data_root else None)
-        or Path.home() / "bandqr-data"
+        or Path.home() / "bandedqr-data"
     ).resolve()
     python = (args.python or Path(sys.executable)).resolve()
     environment = python.parent.parent
@@ -238,7 +238,7 @@ def main() -> int:
         manifest["source"]["archive_sha256"] = sha256(source_archive)
         atomic_json(run_dir / "campaign_manifest.json", manifest)
 
-        with tempfile.TemporaryDirectory(prefix="bandqr-conformance-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="bandedqr-conformance-") as temporary:
             snapshot = Path(temporary) / "source"
             snapshot.mkdir()
             with tarfile.open(source_archive, mode="r:gz") as archive:
@@ -250,11 +250,11 @@ def main() -> int:
             environment_vars = os.environ.copy()
             environment_vars["PYTHONPATH"] = str(snapshot / "src")
             scrubbed = [
-                "BANDQR_LIBRARY",
-                "BANDQR_THREAD_MIN_KL",
-                "BANDQR_THREAD_MIN_WORK",
-                "BANDQR_THREAD_MAX",
-                "BANDQR_CACHE",
+                "BANDEDQR_LIBRARY",
+                "BANDEDQR_THREAD_MIN_KL",
+                "BANDEDQR_THREAD_MIN_WORK",
+                "BANDEDQR_THREAD_MAX",
+                "BANDEDQR_CACHE",
             ]
             for name in scrubbed:
                 environment_vars.pop(name, None)
@@ -292,7 +292,7 @@ def main() -> int:
                 "--hash",
                 str(snapshot / "bench/paper/drivers/backend_conformance.py"),
                 "--hash",
-                str(snapshot / "src/bandqr/gpu.py"),
+                str(snapshot / "src/bandedqr/gpu.py"),
             ]
             logged(
                 provenance_args,

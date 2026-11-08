@@ -1,4 +1,4 @@
-# Working on bandqr
+# Working on bandedqr
 
 Operational context for anyone — human or agent — editing this repository.
 `README.md` explains what the library *is*; this explains how to work on it and
@@ -28,12 +28,12 @@ discovery performs an isolated evaluated-operation probe before advertising it.
 ## Commands
 
 ```sh
-make                 # build the C kernel into src/bandqr/
+make                 # build the C kernel into src/bandedqr/
 make test            # pytest
 make bench           # CPU benchmarks
 make bench-gpu       # GPU benchmarks
 make nothreads       # serial build (portability check), then re-run tests
-make standalone      # regenerate bandqr_standalone.py -- CI fails if stale
+make standalone      # regenerate bandedqr_standalone.py -- CI fails if stale
 pip install -e ".[test]"
 ~/miniforge3/envs/dedalus3/bin/python cluster/local/run_backend_conformance.py
 ```
@@ -67,10 +67,10 @@ If you want to change one, re-run the benchmark rather than reasoning about it.
   without storing row indices. Change one, change both.
 - **C and Metal use the same Givens formula** deliberately, so GPU `R` can be
   compared against CPU `R`. That comparison is what isolated the complex bug.
-- **One templated source per backend.** `bandqr_impl.h` is included twice
+- **One templated source per backend.** `bandedqr_impl.h` is included twice
   (`double`, `double _Complex`); the Metal source is generated twice
   (`float`, `float2`). Fix bugs in the template, not one instantiation.
-- **`bandqr_standalone.py` must be regenerated** after any package edit; CI
+- **`bandedqr_standalone.py` must be regenerated** after any package edit; CI
   checks it. It flattens the package, so the dependency order in
   `tools/make_standalone.py: MODULES` is load-bearing.
 
@@ -96,9 +96,9 @@ If you want to change one, re-run the benchmark rather than reasoning about it.
 - **No licence.** Deferred deliberately. Until a LICENSE file exists the default
   is all-rights-reserved, so nobody else can legally use this. The `license`
   line in `pyproject.toml` is commented out with a note. This blocks publication.
-- **Project URLs in `pyproject.toml` are a guess** (`github.com/sidneyholden/bandqr`).
-  The working copies synchronize through a private bare repository on Rusty;
-  no public GitHub account/repository has been selected.
+- **No public project URLs are configured.** The working copies synchronize
+  through a private bare repository on Rusty; no public GitHub account/repository
+  has been selected.
 - **CI is written but has never run on GitHub.** It now covers GCC, Clang,
   macOS arm64 CPU, a no-pthreads build, strict C warnings, ASan/UBSan, and the
   standalone artifact, but activation awaits the public/private GitHub choice.
@@ -110,5 +110,5 @@ If you want to change one, re-run the benchmark rather than reasoning about it.
 - **Metal code exists but its publication-quality gate is still pending.** Run
   `cluster/local/run_backend_conformance.py` from a logged-in Mac. README
   benchmark numbers remain preliminary best-of-N measurements from one M3 Max.
-- `archive/` holds the superseded Dedalus integration. Nothing in `src/bandqr`
+- `archive/` holds the superseded Dedalus integration. Nothing in `src/bandedqr`
   imports it; see `archive/README.md`.

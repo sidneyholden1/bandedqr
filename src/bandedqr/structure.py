@@ -3,7 +3,7 @@
 An *almost-banded* matrix is a banded bulk plus a small number of dense rows
 (boundary conditions) and/or dense columns (tau corrections).  Recovering
 ``(kl, ku, dense_rows, dense_cols)`` from the sparsity pattern is what lets
-:func:`bandqr.solve` dispatch without being told the structure.
+:func:`bandedqr.solve` dispatch without being told the structure.
 
 The detection is deliberately conservative and reports what it did.  It is a
 heuristic on an ambiguous problem -- "is this row a boundary condition or just a

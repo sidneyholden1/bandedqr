@@ -1,6 +1,6 @@
 /* Standalone timing harness, no Python.  Build native arm64 and x86_64 to see
  * the algorithm's true speed vs the Rosetta-translation tax. */
-#include "bandqr.h"
+#include "bandedqr.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -32,9 +32,9 @@ static void run(int n, int kl, int ku, int reps) {
     double best = 1e9;
     for (int r = 0; r < reps; r++) {
         double t0 = wall();
-        band_qr_d *qr = bandqr_factor_d(ab, n, n, kl, ku);
-        bandqr_solve_d(qr, b, x);
-        bandqr_free_d(qr);
+        band_qr_d *qr = bandedqr_factor_d(ab, n, n, kl, ku);
+        bandedqr_solve_d(qr, b, x);
+        bandedqr_free_d(qr);
         double dt = wall() - t0;
         if (dt < best) best = dt;
     }

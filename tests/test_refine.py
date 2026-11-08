@@ -2,9 +2,9 @@
 import numpy as np
 import pytest
 
-from bandqr import (BandQR, compensated_residual, cond1_estimate, condest,
+from bandedqr import (BandQR, compensated_residual, cond1_estimate, condest,
                     dense_to_band, iterative_refinement, solve)
-from bandqr.refine import compensated_band_matvec, two_prod, two_sum
+from bandedqr.refine import compensated_band_matvec, two_prod, two_sum
 from conftest import make_banded, relerr
 
 
@@ -115,7 +115,7 @@ def _ill_conditioned(n, cond):
 def test_refinement_reduces_residual(rng, cond):
     n = 400
     ab = _ill_conditioned(n, cond)
-    from bandqr import band_to_dense
+    from bandedqr import band_to_dense
     A = band_to_dense(ab, 1, 1, n)
     b = rng.standard_normal(n)
     F = BandQR(ab, 1, 1)
@@ -130,7 +130,7 @@ def test_refinement_reduces_residual(rng, cond):
 def test_solve_refine_flag_runs(rng):
     n = 300
     ab = _ill_conditioned(n, 1e8)
-    from bandqr import band_to_dense
+    from bandedqr import band_to_dense
     A = band_to_dense(ab, 1, 1, n)
     b = rng.standard_normal(n)
     x_plain = solve(A, b, method="givens")
@@ -167,7 +167,7 @@ def test_condest_is_within_a_factor_of_truth(rng, n, kl, ku):
 
 
 def test_condest_tracks_ill_conditioning(rng):
-    from bandqr import band_to_dense
+    from bandedqr import band_to_dense
     ests, trues = [], []
     for cond in (1e2, 1e6, 1e10):
         ab = _ill_conditioned(300, cond)

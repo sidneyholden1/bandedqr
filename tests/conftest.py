@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from bandqr import dense_to_band
+from bandedqr import dense_to_band
 
 
 @pytest.fixture

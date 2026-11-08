@@ -1,14 +1,14 @@
 # Developer build.  Compiles the C kernel in place inside the package so that
-# `import bandqr` works straight from a checkout (no install step).  For a real
+# `import bandedqr` works straight from a checkout (no install step).  For a real
 # install, `pip install -e .` runs the same compile through setuptools.
 CC      ?= cc
-SRC      = src/bandqr/csrc
-PKG      = src/bandqr
+SRC      = src/bandedqr/csrc
+PKG      = src/bandedqr
 PY      ?= python3
 
 UNAME   := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-  LIB    = $(PKG)/libbandqr.dylib
+  LIB    = $(PKG)/libbandedqr.dylib
   SHARED = -dynamiclib
   # universal2 so the lib loads under both native arm64 and x86_64 (Rosetta)
   # Python.  NOTE: AVX2 is *slower* under Rosetta (it translates wide vectors
@@ -17,7 +17,7 @@ ifeq ($(UNAME),Darwin)
   # Python to use it (2-3x faster than the Rosetta path on wide bands).
   ARCH   = -arch arm64 -Xarch_arm64 -mcpu=apple-m1 -arch x86_64
 else
-  LIB    = $(PKG)/libbandqr.so
+  LIB    = $(PKG)/libbandedqr.so
   SHARED = -shared
   ARCH   =
 endif
@@ -27,12 +27,12 @@ CFLAGS  = $(OPT) $(ARCH)
 
 all: $(LIB)
 
-$(LIB): $(SRC)/bandqr.c $(SRC)/bandqr.h $(SRC)/bandqr_impl.h
-	$(CC) $(CFLAGS) $(SHARED) -o $@ $(SRC)/bandqr.c -lpthread -lm
+$(LIB): $(SRC)/bandedqr.c $(SRC)/bandedqr.h $(SRC)/bandedqr_impl.h
+	$(CC) $(CFLAGS) $(SHARED) -o $@ $(SRC)/bandedqr.c -lpthread -lm
 
 # Single-threaded build -- no pthread/C11-atomics dependency (portability check).
-nothreads: $(SRC)/bandqr.c
-	$(CC) $(CFLAGS) -DBANDQR_NO_THREADS $(SHARED) -o $(LIB) $(SRC)/bandqr.c -lm
+nothreads: $(SRC)/bandedqr.c
+	$(CC) $(CFLAGS) -DBANDEDQR_NO_THREADS $(SHARED) -o $(LIB) $(SRC)/bandedqr.c -lm
 
 test: $(LIB)
 	$(PY) -m pytest tests -q
@@ -48,12 +48,12 @@ standalone: $(LIB)
 	$(PY) tools/make_standalone.py
 
 # Diagnostic: report which loops the vectoriser took.
-vecreport: $(SRC)/bandqr.c
+vecreport: $(SRC)/bandedqr.c
 	$(CC) $(OPT) -Rpass=loop-vectorize -Rpass-missed=loop-vectorize \
-	      -c $(SRC)/bandqr.c -o /dev/null
+	      -c $(SRC)/bandedqr.c -o /dev/null
 
 clean:
-	rm -f $(PKG)/libbandqr.dylib $(PKG)/libbandqr.so $(PKG)/_libbandqr*.so
+	rm -f $(PKG)/libbandedqr.dylib $(PKG)/libbandedqr.so $(PKG)/_libbandedqr*.so
 	rm -rf build dist src/*.egg-info .pytest_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
 

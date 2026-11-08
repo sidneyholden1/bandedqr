@@ -2,7 +2,7 @@
 
 The cluster files implement a small immutable control plane around Slurm.
 Versioned templates live here, generated records live in `runs/` (ignored by
-Git), and detailed outputs live under `~/ceph/bandqr/`.
+Git), and detailed outputs live under `~/ceph/bandedqr/`.
 
 On Rusty, create the lightweight core environment once:
 
@@ -12,7 +12,7 @@ On Rusty, create the lightweight core environment once:
 
 The environment uses Rusty's versioned Python/MPI module stack through
 `--system-site-packages`; it downloads nothing and records the exact module and
-package state under `~/envs/bandqr/share/cpu/`.
+package state under `~/envs/bandedqr/share/cpu/`.
 
 Submit the initial correctness-only gate with:
 

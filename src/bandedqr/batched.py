@@ -1,7 +1,7 @@
 """Batched banded QR: many independent same-shape systems at once.
 
 Backend-neutral front end.  The ``"metal"`` backend is implemented in
-:mod:`bandqr.gpu` (with ``"gpu"`` retained as a compatibility alias); the
+:mod:`bandedqr.gpu` (with ``"gpu"`` retained as a compatibility alias); the
 ``"numpy"`` backend here is a vectorised host
 implementation that runs everywhere, needs no MLX, and works in the input dtype
 (so float64 in, float64 out, with no refinement needed).
@@ -11,7 +11,7 @@ identical for every system -- that is exactly what pivot-freedom buys -- so each
 rotation is one array operation over all systems at once.  Its Python overhead
 scales with ``n * kl`` rotations rather than with the batch, which makes it good
 for the regime the GPU targets (moderate ``n``, large batch) and poor for a few
-very long systems (use :class:`bandqr.BandQR` per system for those).
+very long systems (use :class:`bandedqr.BandQR` per system for those).
 
 It also serves as the reference the GPU kernel is tested against: same rotation
 formula, same order, so ``R`` agrees to fp32 rounding.

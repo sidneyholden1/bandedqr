@@ -2,9 +2,9 @@
 import numpy as np
 import pytest
 
-from bandqr import (LQ, BandQR, band_to_dense, dense_to_band, has_threads,
+from bandedqr import (LQ, BandQR, band_to_dense, dense_to_band, has_threads,
                     solve, to_band)
-from bandqr._band import band_matvec, band_norm1, band_transpose, to_scipy_band
+from bandedqr._band import band_matvec, band_norm1, band_transpose, to_scipy_band
 from conftest import make_band_storage, make_banded, relerr
 
 DTYPES = [False, True]      # complex_?
@@ -58,7 +58,7 @@ def test_householder_agrees_with_givens(rng, complex_):
 
 
 # ------------------------------------------------------------------ threading
-@pytest.mark.skipif(not has_threads(), reason="built with BANDQR_NO_THREADS")
+@pytest.mark.skipif(not has_threads(), reason="built with BANDEDQR_NO_THREADS")
 @pytest.mark.parametrize("nthreads", [2, 4, 8])
 @pytest.mark.parametrize("complex_", DTYPES)
 def test_threaded_R_is_bit_identical(rng, nthreads, complex_):
@@ -71,7 +71,7 @@ def test_threaded_R_is_bit_identical(rng, nthreads, complex_):
 
 
 def test_auto_threads_is_serial_for_narrow_bands():
-    from bandqr.banded import auto_threads
+    from bandedqr.banded import auto_threads
     assert auto_threads(100000, 2, 2) == 1
     assert auto_threads(100000, 32, 32) == 1
     if has_threads():
@@ -178,7 +178,7 @@ def test_band_matvec_and_norms(rng):
 
 
 def test_scipy_band_roundtrip(rng):
-    from bandqr import from_scipy_band
+    from bandedqr import from_scipy_band
     # band storage from a real matrix, so the corner slots (which index columns
     # outside [0, n) and are "don't care") are zero and survive the round trip
     ab = dense_to_band(make_banded(rng, 30, 2, 3), 2, 3)

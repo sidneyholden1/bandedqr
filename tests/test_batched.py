@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-from bandqr import BandQR, available_backends, solve_batched
-from bandqr import gpu as gpu_mod
-from bandqr.batched import BatchedBandQR as NumpyBatched
-from bandqr._band import band_matvec_batched
+from bandedqr import BandQR, available_backends, solve_batched
+from bandedqr import gpu as gpu_mod
+from bandedqr.batched import BatchedBandQR as NumpyBatched
+from bandedqr._band import band_matvec_batched
 
 needs_gpu = pytest.mark.skipif(not gpu_mod.is_available(),
                                reason="no MLX/Metal device")
@@ -169,8 +169,8 @@ def test_gpu_residual_matches_numpy(rng):
 @needs_gpu
 @pytest.mark.parametrize("r", [1, 2, 3])
 def test_gpu_ride_matches_cpu(rng, r):
-    from bandqr import RideQR
-    from bandqr._band import band_to_dense
+    from bandedqr import RideQR
+    from bandedqr._band import band_to_dense
     n, kl, ku, batch = 64, 2, 2, 96
     bulk = rng.standard_normal((n, kl + ku + 1, batch))
     bulk[:, kl, :] += kl + ku + 5

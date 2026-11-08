@@ -1,8 +1,8 @@
-"""Publication figures for the bandqr paper (matplotlib -> PDFs in ./figures/).
+"""Publication figures for the bandedqr paper (matplotlib -> PDFs in ./figures/).
 
     python paper/make_figures.py
 
-bandqr-only figures (conditioning, bandwidth) are computed LIVE against the
+bandedqr-only figures (conditioning, bandwidth) are computed LIVE against the
 current library.  The cross-tool comparisons (scaling, crossover, GPU) use
 numbers recorded in DATA below.
 
@@ -28,8 +28,8 @@ mpl.rcParams.update({
     "lines.linewidth": 2.2, "lines.markersize": 6, "figure.facecolor": "white",
     "axes.spines.top": False, "axes.spines.right": False, "savefig.facecolor": "white",
 })
-COL = {"bandqr": "C0", "Dedalus SuperLU": "C1", "ApproxFun QR": "C3"}
-MK  = {"bandqr": "o", "Dedalus SuperLU": "s", "ApproxFun QR": "^"}
+COL = {"bandedqr": "C0", "Dedalus SuperLU": "C1", "ApproxFun QR": "C3"}
+MK  = {"bandedqr": "o", "Dedalus SuperLU": "s", "ApproxFun QR": "^"}
 
 def _xticks(ax, vals):                       # plain-integer ticks at the data points only
     sf = ScalarFormatter(); sf.set_scientific(False); sf.set_useOffset(False)
@@ -49,7 +49,7 @@ def save(fig, name):
 # ----------------------------- recorded data (benchmarks.ipynb) ----------------
 NS = np.array([1024, 4096, 8192, 16384])
 THREEWAY = {  # factor / solve, milliseconds (assembly excluded)
-    "bandqr":          {"factor": [0.025, 0.082, 0.159, 0.328], "solve": [0.028, 0.092, 0.174, 0.355]},
+    "bandedqr":          {"factor": [0.025, 0.082, 0.159, 0.328], "solve": [0.028, 0.092, 0.174, 0.355]},
     "Dedalus SuperLU": {"factor": [0.220, 0.784, 1.643, 3.294], "solve": [0.016, 0.062, 0.119, 0.205]},
     "ApproxFun QR":    {"factor": [0.109, 0.429, 0.872, 1.720], "solve": [0.050, 0.214, 0.426, 0.852]},
 }
@@ -57,7 +57,7 @@ GPU = {"batch": np.array([1024, 4096, 8192, 16384]),
        "gpu_ms": np.array([3.54, 8.64, 20.04, 23.01]),
        "cpu_ms": np.array([29.8, 211.9, 746.2, 1548.7]),
        "speedup": np.array([8.4, 24.5, 37.2, 67.3])}
-# bandqr on the FULL real Dedalus operator (dense BC rows + tau columns), ride + Woodbury.
+# bandedqr on the FULL real Dedalus operator (dense BC rows + tau columns), ride + Woodbury.
 # Same matrix as the Dedalus SuperLU column -> the fair, like-for-like comparison.
 # (After vectorizing the row permutation + staying in CSR; crosses below SuperLU at large N.)
 RIDETAU = {"factor": [0.56, 1.03, 1.76, 3.11], "solve": [0.031, 0.091, 0.171, 0.332]}
@@ -68,7 +68,7 @@ def fig_performance():
     # (banded bulk + dense BC rows + tau columns); assembly excluded, nothing else.
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.6))
     series = [
-        ("bandqr",          RIDETAU,                     "C0", "o"),
+        ("bandedqr",          RIDETAU,                     "C0", "o"),
         ("Dedalus SuperLU", THREEWAY["Dedalus SuperLU"], "C1", "s"),
         ("ApproxFun QR",    THREEWAY["ApproxFun QR"],    "C3", "^"),
     ]
@@ -102,7 +102,7 @@ def fig_conditioning():
         import sys, os as _os
         sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.dirname(
             _os.path.abspath(__file__))), 'src'))
-        from bandqr import solve_ride, solve_precond_rows
+        from bandedqr import solve_ride, solve_precond_rows
         rng = np.random.default_rng(0); ride, coll = [], []
         for n in Ns:
             M = _helm(n); b = rng.standard_normal(n); xr = spla.spsolve(M.tocsc(), b)
@@ -135,7 +135,7 @@ def fig_bandwidth():
     pyb_rec = [0.70, 0.83, 1.37, 2.94, 9.86]   # recorded pybanded (if not importable here)
     try:
         import scipy.linalg as sla
-        from bandqr import BandQR, dense_to_band
+        from bandedqr import BandQR, dense_to_band
         n = 10000; rng = np.random.default_rng(0)
         def best(fn, r=7):
             return min((lambda t: (fn(), time.perf_counter() - t)[1])(time.perf_counter()) for _ in range(r)) * 1e3
@@ -166,8 +166,8 @@ def fig_bandwidth():
         kls = [2, 4, 8, 16, 32]; giv = [0.33, 0.67, 1.63, 3.60, 10.15]
         hh = [0.44, 0.62, 1.07, 2.29, 6.91]; lu = [0.42, 0.54, 0.84, 1.33, 2.82]; pyb = pyb_rec
     fig, ax = plt.subplots(figsize=(7, 4.8))
-    ax.loglog(kls, giv, "o-", color="C0", label="bandqr Givens")
-    ax.loglog(kls, hh, "D-", color="C4", label="bandqr Householder")
+    ax.loglog(kls, giv, "o-", color="C0", label="bandedqr Givens")
+    ax.loglog(kls, hh, "D-", color="C4", label="bandedqr Householder")
     ax.loglog(kls, pyb, "v-", color="C1", label="pybanded (Householder)")
     ax.loglog(kls, lu, "s-", color="C2", label="LAPACK band-LU")
     ax.set(xlabel="bandwidth  $k_l=k_u$", ylabel="factor + solve [ms]", title="$n=10000$")

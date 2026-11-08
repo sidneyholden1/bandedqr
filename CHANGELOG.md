@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Rename the distribution, Python import, standalone module, native ABI, and
+  configuration prefix to `bandedqr` / `BANDEDQR_`. This is a clean break: no
+  `bandqr` import, native-symbol, or environment-variable aliases are provided.
+- Keep mathematical class names such as `BandQR` and `BatchedBandQR` unchanged.
+- Preserve pre-rename archives and immutable experiment records. See
+  `docs/rename_migration.md` for installation and path migration.
+
 ## 0.2.0 — standalone library
 
 bandqr becomes a self-contained banded/almost-banded QR library. The Dedalus

@@ -24,15 +24,15 @@ if sys.platform == "darwin":
                             and a != "-mcpu=apple-m1"]
 elif sys.platform.startswith("win"):
     # no pthreads / C11 atomics on MSVC: build the serial kernel
-    define_macros.append(("BANDQR_NO_THREADS", "1"))
+    define_macros.append(("BANDEDQR_NO_THREADS", "1"))
     extra_compile_args = ["/O2"]
 
 setup(
     ext_modules=[
         Extension(
-            "bandqr._libbandqr",
-            sources=["src/bandqr/csrc/bandqr.c"],
-            include_dirs=["src/bandqr/csrc"],
+            "bandedqr._libbandedqr",
+            sources=["src/bandedqr/csrc/bandedqr.c"],
+            include_dirs=["src/bandedqr/csrc"],
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
             define_macros=define_macros,

@@ -3,7 +3,7 @@ set -euo pipefail
 umask 027
 
 readonly SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-readonly ENV_ROOT="${1:-/mnt/home/sholden/envs/bandqr}"
+readonly ENV_ROOT="${1:-/mnt/home/sholden/envs/bandedqr}"
 readonly ENV_DIR="${ENV_ROOT}/cpu"
 readonly SHARE_DIR="${ENV_ROOT}/share/cpu"
 readonly LOG_DIR="${ENV_ROOT}/environment/logs"
@@ -17,7 +17,7 @@ if [[ -f "${SHARE_DIR}/READY" ]]; then
         echo "READY exists but ${ENV_DIR}/bin/python is missing" >&2
         exit 1
     fi
-    echo "bandqr CPU environment is already ready: ${ENV_DIR}"
+    echo "bandedqr CPU environment is already ready: ${ENV_DIR}"
     exit 0
 fi
 if [[ -e "${ENV_DIR}" ]]; then
@@ -63,4 +63,4 @@ readonly READY_TMP="${SHARE_DIR}/.READY.$$"
     "${ENV_DIR}/bin/python" --version
 } > "${READY_TMP}"
 mv "${READY_TMP}" "${SHARE_DIR}/READY"
-echo "bandqr CPU environment ready: ${ENV_DIR}"
+echo "bandedqr CPU environment ready: ${ENV_DIR}"

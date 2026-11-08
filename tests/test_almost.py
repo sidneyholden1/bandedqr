@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from bandqr import (BorderedQR, CollapseBothQR, CollapseColsQR, CollapseQR,
+from bandedqr import (BorderedQR, CollapseBothQR, CollapseColsQR, CollapseQR,
                     RideQR, RideQRRect, RideTauQR, detect_recurrence,
                     detect_structure, factorize, solve, solve_with_tau_columns)
 from conftest import (chebyshev_bc_rows, make_almost_banded, make_banded,
@@ -212,7 +212,7 @@ def test_solve_with_tau_columns(rng):
     Fcols = rng.standard_normal((m, c))
     A = np.hstack([N, Fcols])
     b = rng.standard_normal(m)
-    from bandqr import dense_to_band
+    from bandedqr import dense_to_band
     x = solve_with_tau_columns(dense_to_band(N, kl, ku), kl, ku, Fcols, b)
     assert np.allclose(x, np.linalg.solve(A, b), rtol=1e-8, atol=1e-10)
 

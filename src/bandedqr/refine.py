@@ -242,7 +242,7 @@ def cond1_estimate(solve, solve_H, n, norm1_A, dtype=np.float64, maxiter=5):
 
 
 def condest(F, ab=None, kl=None, ku=None, maxiter=5):
-    """Condition estimate for a :class:`~bandqr.banded.BandQR` factorisation.
+    """Condition estimate for a :class:`~bandedqr.banded.BandQR` factorisation.
 
     Uses the factorisation's own ``solve`` and ``solve_H``; only meaningful for
     square systems.

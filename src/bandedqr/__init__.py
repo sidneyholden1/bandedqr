@@ -1,9 +1,9 @@
-"""bandqr -- fast, deterministic banded and almost-banded QR.
+"""bandedqr -- fast, deterministic banded and almost-banded QR.
 
 A small C kernel (no LAPACK, no pivoting, no densifying) with a Python front
 end, plus a batched Metal backend for the many-independent-systems regime.
 
-    >>> from bandqr import solve
+    >>> from bandedqr import solve
     >>> x = solve(A, b)          # structure detected, factorisation chosen
 
 Why QR rather than LU: the fill is *deterministic* -- ``ku + kl`` upper, always,

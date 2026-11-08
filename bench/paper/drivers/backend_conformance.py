@@ -21,9 +21,9 @@ from typing import Callable
 
 import numpy as np
 
-from bandqr import RideQR
-from bandqr._band import band_matvec_batched, band_to_dense
-from bandqr.batched import BatchedBandQR as NumpyBatched
+from bandedqr import RideQR
+from bandedqr._band import band_matvec_batched, band_to_dense
+from bandedqr.batched import BatchedBandQR as NumpyBatched
 
 
 ArrayApply = Callable[[np.ndarray], np.ndarray]
@@ -206,7 +206,7 @@ def backend_metadata(selector: str) -> dict:
     if selector != "metal":
         raise ValueError(f"unsupported selector {selector!r}; expected numpy or metal")
 
-    from bandqr import gpu
+    from bandedqr import gpu
 
     if not gpu.is_available():
         raise gpu.GPUUnavailable(
@@ -243,7 +243,7 @@ def make_factor(
 ):
     if selector == "numpy":
         return NumpyBatched(ab, kl, ku, shifts=shifts)
-    from bandqr import gpu
+    from bandedqr import gpu
 
     return gpu.BatchedBandQR(ab, kl, ku, shifts=shifts)
 
@@ -576,7 +576,7 @@ def run(config: dict, selector: str, config_hash: str) -> dict:
             if selector == "numpy":
                 factor = reference
             else:
-                from bandqr import gpu
+                from bandedqr import gpu
 
                 factor = gpu.BatchedRideQR.from_dense_rows(
                     bulk, case["kl"], case["ku"], dense_rows, rows

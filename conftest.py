@@ -1,6 +1,6 @@
 """Make ``src/`` importable so the suite runs from a checkout without installing.
 
-If bandqr *is* installed (``pip install -e .``) that copy wins; this only fills
+If bandedqr *is* installed (``pip install -e .``) that copy wins; this only fills
 in the `make && pytest` path.
 """
 import os

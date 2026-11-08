@@ -61,7 +61,7 @@ def _mx():
     except ImportError as exc:                       # pragma: no cover
         raise GPUUnavailable(
             "the GPU backend needs mlx (`pip install mlx`) on a native-arm64 "
-            "Python.  Use bandqr.batched.solve_batched(..., backend='numpy') "
+            "Python.  Use bandedqr.batched.solve_batched(..., backend='numpy') "
             "for a portable batched path."
         ) from exc
     return mx
@@ -439,7 +439,7 @@ def _kernel(kind, kl, ku, cplx, shifted=False, rfill=0):
         raise ValueError(f"unknown kernel kind {kind!r}")
 
     kern = mx.fast.metal_kernel(
-        name=(f"bandqr_{kind}_{kl}_{ku}_{'z' if cplx else 'd'}"
+        name=(f"bandedqr_{kind}_{kl}_{ku}_{'z' if cplx else 'd'}"
               f"{'_sh' if shifted else ''}{f'_r{rfill}' if rfill else ''}"),
         input_names=inputs,
         output_names=outputs,
@@ -613,7 +613,7 @@ class BatchedBandQR:
         ab = np.ascontiguousarray(ab, dt)
 
         w = self.kl + self.ku + 1
-        fn = getattr(_native.lib, "bandqr_band_residual_batched"
+        fn = getattr(_native.lib, "bandedqr_band_residual_batched"
                      + _native.suffix_for(cplx))
         p = _native.ptr_for(cplx)
         out = np.empty_like(X)
@@ -884,7 +884,7 @@ class BatchedRideQR:
         L = np.ascontiguousarray(self._L_host, dt)
 
         w = self.kl + self.ku + 1
-        fn = getattr(_native.lib, "bandqr_band_residual_batched"
+        fn = getattr(_native.lib, "bandedqr_band_residual_batched"
                      + _native.suffix_for(cplx))
         p = _native.ptr_for(cplx)
         out = np.empty_like(X)

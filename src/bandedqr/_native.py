@@ -1,8 +1,8 @@
 """ctypes binding to the C kernel.
 
 The library is loaded from the package directory, accepting either the name the
-developer Makefile produces (``libbandqr.dylib`` / ``libbandqr.so``) or the one
-setuptools produces for an installed wheel (``_libbandqr.<abi>.so``).
+developer Makefile produces (``libbandedqr.dylib`` / ``libbandedqr.so``) or the one
+setuptools produces for an installed wheel (``_libbandedqr.<abi>.so``).
 
 Every C routine exists in a ``_d`` (float64) and a ``_z`` (complex128) flavour.
 Real arrays are passed as ``POINTER(c_double)``; complex128 arrays are passed by
@@ -32,11 +32,11 @@ class LibraryNotFound(RuntimeError):
 
 def _candidates():
     here = os.path.dirname(os.path.abspath(__file__))
-    env = os.environ.get("BANDQR_LIBRARY")
+    env = os.environ.get("BANDEDQR_LIBRARY")
     if env:
         yield env
-    for pattern in ("libbandqr.dylib", "libbandqr.so", "_libbandqr*.so",
-                    "_libbandqr*.dylib", "_libbandqr*.pyd"):
+    for pattern in ("libbandedqr.dylib", "libbandedqr.so", "_libbandedqr*.so",
+                    "_libbandedqr*.dylib", "_libbandedqr*.pyd"):
         yield from sorted(glob.glob(os.path.join(here, pattern)))
 
 
@@ -48,9 +48,9 @@ def _load():
         except OSError as exc:  # wrong architecture, missing deps, ...
             tried.append(f"  {path}: {exc}")
     raise LibraryNotFound(
-        "could not load the bandqr C kernel.\n"
+        "could not load the bandedqr C kernel.\n"
         "Build it with `make` (in a checkout) or `pip install -e .`, or point\n"
-        "BANDQR_LIBRARY at an existing shared library.\n"
+        "BANDEDQR_LIBRARY at an existing shared library.\n"
         + ("Tried:\n" + "\n".join(tried) if tried else "No candidate files found.")
     )
 
@@ -61,7 +61,7 @@ lib = _load()
 def _bind():
     for suf, arr in (("_d", _dbl), ("_z", _vp)):
         def fn(name):
-            return getattr(lib, "bandqr_" + name + suf)
+            return getattr(lib, "bandedqr_" + name + suf)
 
         f = fn("factor");           f.restype = _vp; f.argtypes = [arr, _int, _int, _int, _int]
         f = fn("factor_mt");        f.restype = _vp; f.argtypes = [arr, _int, _int, _int, _int, _int]
@@ -81,8 +81,8 @@ def _bind():
         f.argtypes = [arr, _int, _int, _int, _int, _int, arr, arr, arr]
         f = fn("get_R");            f.restype = None; f.argtypes = [_vp, arr]
         f = fn("free");             f.restype = None; f.argtypes = [_vp]
-    lib.bandqr_has_threads.restype = _int
-    lib.bandqr_has_threads.argtypes = []
+    lib.bandedqr_has_threads.restype = _int
+    lib.bandedqr_has_threads.argtypes = []
 
 
 _bind()
@@ -90,7 +90,7 @@ _bind()
 
 def has_threads():
     """True if the kernel was built with pthread support (``factor_mt`` is real)."""
-    return bool(lib.bandqr_has_threads())
+    return bool(lib.bandedqr_has_threads())
 
 
 def as_ptr(a):

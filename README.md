@@ -1,11 +1,11 @@
-# bandqr
+# bandedqr
 
 A fast, deterministic **banded and almost-banded QR** solver — a small C kernel
 (no LAPACK, no pivoting, no densifying) with a Python front end, plus a batched
 Metal backend for solving thousands of systems at once.
 
 ```python
-from bandqr import solve
+from bandedqr import solve
 x = solve(A, b)          # A banded or almost-banded, dense or scipy.sparse
 ```
 
@@ -28,12 +28,12 @@ pip install -e .          # builds the C kernel through setuptools
 or, from a checkout, without installing:
 
 ```sh
-make && python -c "import sys; sys.path.insert(0,'src'); import bandqr"
+make && python -c "import sys; sys.path.insert(0,'src'); import bandedqr"
 ```
 
 Requirements: a C compiler and `numpy`. `scipy` for the sparse and
 almost-banded helpers, `mlx` for the GPU backend. macOS and Linux; Windows
-builds serial-only (`-DBANDQR_NO_THREADS`, set automatically).
+builds serial-only (`-DBANDEDQR_NO_THREADS`, set automatically).
 
 ---
 
@@ -99,7 +99,7 @@ x = solve(A_complex, b_complex)     # complex128 automatically
 The expensive factorisation is reused across right-hand sides:
 
 ```python
-from bandqr import factorize
+from bandedqr import factorize
 F = factorize(A, method="ride", dense_rows=[0, 1])
 for b in rhs_stream:
     x = F.solve(b)                   # b may be (n,) or (n, nrhs)
@@ -138,14 +138,14 @@ no longer a constraint on where boundary rows sit.
 
 ## Metal GPU — batched solve
 
-`bandqr.solve_batched` solves **many independent same-shape systems at once** on
+`bandedqr.solve_batched` solves **many independent same-shape systems at once** on
 the Apple GPU: one thread per system, pivot-free so every lane takes the same
 instruction path, batch laid out fastest so neighbouring threads read
 neighbouring floats. This is the spectral regime — one banded ODE per Fourier
 mode means thousands of systems per timestep.
 
 ```python
-from bandqr import solve_batched
+from bandedqr import solve_batched
 X = solve_batched(ab, b, kl, ku, backend="metal")
 # ab: (n, kl+ku+1, batch), b: (n, batch)
 ```
@@ -206,7 +206,7 @@ large batch.
 Without pivoting there is no growth factor to inspect, so:
 
 ```python
-from bandqr import condest, solve
+from bandedqr import condest, solve
 condest(F)                       # Hager-Higham 1-norm condition estimate
 x = solve(A, b, refine=3)        # refinement against compensated residuals
 ```
@@ -230,7 +230,7 @@ synchronisation is pure overhead. Measured on an M3 Max, 8 threads vs serial:
 |---|---|---|---|---|---|
 | speedup | 1.00× | 1.00× | 1.67× | 2.28× | 2.78× |
 
-so auto stays serial below `kl=64` (override with `BANDQR_THREAD_MIN_KL`).
+so auto stays serial below `kl=64` (override with `BANDEDQR_THREAD_MIN_KL`).
 Threaded `R` is **bit-identical** to serial `R` — the factorisation is
 deterministic, and the test suite asserts exact equality.
 
@@ -266,7 +266,7 @@ residual against exact rational arithmetic; the condition estimator against
 ## Layout
 
 ```
-src/bandqr/          package
+src/bandedqr/          package
   csrc/              the C kernel (one templated source, real + complex)
   banded.py          BandQR, LQ            almost.py    Ride*, Collapse*, Bordered*
   gpu.py             Metal batched         batched.py   NumPy batched + dispatch

@@ -20,10 +20,10 @@ __all__ = ["BandQR", "LQ", "auto_threads"]
 #     kl=32   1.00x        kl=96    2.28x
 #                          kl=128   2.78x
 #
-# so auto stays serial below kl=64.  Override with BANDQR_THREAD_MIN_KL.
-_THREAD_MIN_KL = int(os.environ.get("BANDQR_THREAD_MIN_KL", "64"))
-_THREAD_MIN_WORK = float(os.environ.get("BANDQR_THREAD_MIN_WORK", "5e7"))
-_THREAD_MAX = int(os.environ.get("BANDQR_THREAD_MAX", "8"))
+# so auto stays serial below kl=64.  Override with BANDEDQR_THREAD_MIN_KL.
+_THREAD_MIN_KL = int(os.environ.get("BANDEDQR_THREAD_MIN_KL", "64"))
+_THREAD_MIN_WORK = float(os.environ.get("BANDEDQR_THREAD_MIN_WORK", "5e7"))
+_THREAD_MAX = int(os.environ.get("BANDEDQR_THREAD_MAX", "8"))
 
 
 def auto_threads(n, kl, ku, requested=0):
@@ -55,7 +55,7 @@ class BandQR:
     Parameters
     ----------
     ab : ndarray ``(m, kl+ku+1)``
-        Band storage; see :mod:`bandqr._band`.  dtype selects the real or
+        Band storage; see :mod:`bandedqr._band`.  dtype selects the real or
         complex kernel.
     householder : bool
         Use one Householder reflector per column instead of Givens rotations.
@@ -93,13 +93,13 @@ class BandQR:
             self._h = self._fn("factor_mt")(self._p(ab), m, self.n, kl, ku,
                                             self.nthreads)
         if not self._h:
-            raise RuntimeError("bandqr factorisation failed (need m >= n, kl,ku >= 0)")
+            raise RuntimeError("bandedqr factorisation failed (need m >= n, kl,ku >= 0)")
         self.kuR = ku + kl
         self.residual = None
 
     # ---- plumbing --------------------------------------------------------
     def _fn(self, name):
-        return getattr(_native.lib, "bandqr_" + name + self._suf)
+        return getattr(_native.lib, "bandedqr_" + name + self._suf)
 
     def _vec_op(self, cname, v):
         """Apply an in-place length-m C vector routine to a vector or a block."""
@@ -187,7 +187,7 @@ class BandQR:
     def rank_deficient(self, tol=None):
         """True if ``R`` has a diagonal entry negligible against the largest.
 
-        No pivoting means bandqr cannot detect rank deficiency *during* the
+        No pivoting means bandedqr cannot detect rank deficiency *during* the
         factorisation; this is the after-the-fact check.
         """
         d = np.abs(self.diag_R)

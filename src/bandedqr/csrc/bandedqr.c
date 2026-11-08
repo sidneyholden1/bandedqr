@@ -1,11 +1,11 @@
-#include "bandqr.h"
+#include "bandedqr.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <complex.h>
 #include <limits.h>
 
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
 #  include <pthread.h>
 #  include <stdatomic.h>
 #endif
@@ -17,11 +17,11 @@
  * ulps, violating the serial/threaded bit-identity contract.  One shared code
  * body also costs effectively nothing: there is only one call per column. */
 #if defined(__GNUC__) && !defined(__clang__)
-#  define BANDQR_COLUMN_FN __attribute__((noipa))
+#  define BANDEDQR_COLUMN_FN __attribute__((noipa))
 #elif defined(__clang__)
-#  define BANDQR_COLUMN_FN __attribute__((noinline))
+#  define BANDEDQR_COLUMN_FN __attribute__((noinline))
 #else
-#  define BANDQR_COLUMN_FN
+#  define BANDEDQR_COLUMN_FN
 #endif
 
 /* Band buffer layout, per row i:
@@ -37,7 +37,7 @@
  */
 #define IDX(qr, i, j)  ((size_t)(i) * (qr)->W + ((j) - (i) + (qr)->kl))
 
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
 static inline void cpu_relax(void)
 {
 #if defined(__x86_64__)
@@ -46,7 +46,7 @@ static inline void cpu_relax(void)
     __asm__ __volatile__("yield");
 #endif
 }
-#endif /* !BANDQR_NO_THREADS */
+#endif /* !BANDEDQR_NO_THREADS */
 
 static inline int ilast_of(int jcol, int kl, int m)
 {
@@ -54,25 +54,25 @@ static inline int ilast_of(int jcol, int kl, int m)
     return v < m - 1 ? v : m - 1;
 }
 
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
 /* Wavefront progress markers, one per column.  Padded to a full cache line:
  * adjacent columns are worked by *different* threads, so packing these into one
  * line makes every publish invalidate every neighbour's copy.  Apple silicon
  * uses 128-byte lines; 128 is a safe upper bound elsewhere too. */
-#define BANDQR_LINE 128
+#define BANDEDQR_LINE 128
 typedef struct {
     _Atomic int v;
-    char pad[BANDQR_LINE - sizeof(_Atomic int)];
-} bandqr_front_t;
+    char pad[BANDEDQR_LINE - sizeof(_Atomic int)];
+} bandedqr_front_t;
 
 /* Publish progress every CHUNK rotations rather than every rotation.  A stale
  * (larger) value only ever *understates* progress, so consumers stay correct;
  * the win is CHUNK-fold less cache-line ping-pong between adjacent columns. */
-#ifndef BANDQR_FRONT_CHUNK
-#define BANDQR_FRONT_CHUNK 8
+#ifndef BANDEDQR_FRONT_CHUNK
+#define BANDEDQR_FRONT_CHUNK 8
 #endif
 #else
-typedef struct { int v; } bandqr_front_t;   /* unused without threads */
+typedef struct { int v; } bandedqr_front_t;   /* unused without threads */
 #endif
 
 /* ---- float64 instantiation ---- */
@@ -82,7 +82,7 @@ typedef struct { int v; } bandqr_front_t;   /* unused without threads */
 #define CONJ(x) (x)
 #define ABS2(x) ((x) * (x))
 #define RE(x)  (x)
-#include "bandqr_impl.h"
+#include "bandedqr_impl.h"
 #undef SCALAR
 #undef REAL
 #undef SUF
@@ -97,7 +97,7 @@ typedef struct { int v; } bandqr_front_t;   /* unused without threads */
 #define CONJ(x) conj(x)
 #define ABS2(x) (creal(x) * creal(x) + cimag(x) * cimag(x))
 #define RE(x)  creal(x)
-#include "bandqr_impl.h"
+#include "bandedqr_impl.h"
 #undef SCALAR
 #undef REAL
 #undef SUF
@@ -105,11 +105,11 @@ typedef struct { int v; } bandqr_front_t;   /* unused without threads */
 #undef ABS2
 #undef RE
 
-#undef BANDQR_COLUMN_FN
+#undef BANDEDQR_COLUMN_FN
 
-int bandqr_has_threads(void)
+int bandedqr_has_threads(void)
 {
-#ifdef BANDQR_NO_THREADS
+#ifdef BANDEDQR_NO_THREADS
     return 0;
 #else
     return 1;

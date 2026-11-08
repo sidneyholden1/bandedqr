@@ -21,9 +21,9 @@ Small control records are written below:
 The retained source archive, exact config, detailed verification JSON, and logs
 default to:
 
-    ~/bandqr-data/<campaign-id>/
+    ~/bandedqr-data/<campaign-id>/
 
-Set BANDQR_LOCAL_DATA_ROOT or pass --data-root to choose another large-data
+Set BANDEDQR_LOCAL_DATA_ROOT or pass --data-root to choose another large-data
 location. The run record captures the resolved path.
 
 The same machinery can be checked without Metal by selecting the portable

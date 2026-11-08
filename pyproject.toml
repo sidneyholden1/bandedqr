@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bandqr"
+name = "bandedqr"
 version = "0.2.0"
 description = "Fast, deterministic banded and almost-banded QR, with a batched GPU backend"
 readme = "README.md"
@@ -32,9 +32,7 @@ test = ["pytest>=7", "scipy>=1.7"]
 bench = ["scipy>=1.7", "matplotlib>=3.5", "pandas>=1.3"]
 all = ["scipy>=1.7", "mlx>=0.20", "pytest>=7", "matplotlib>=3.5", "pandas>=1.3"]
 
-[project.urls]
-Homepage = "https://github.com/sidneyholden/bandqr"
-Issues = "https://github.com/sidneyholden/bandqr/issues"
+# Add verified project URLs when a hosting repository is selected.
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -43,7 +41,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-bandqr = ["csrc/*.c", "csrc/*.h", "*.dylib", "*.so"]
+bandedqr = ["csrc/*.c", "csrc/*.h", "*.dylib", "*.so"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,12 +1,12 @@
-/* bandqr_impl.h -- templated band-QR kernel.  Included once per scalar type by
- * bandqr.c, with macros set:
+/* bandedqr_impl.h -- templated band-QR kernel.  Included once per scalar type by
+ * bandedqr.c, with macros set:
  *     SCALAR   element type (double | double _Complex)
  *     REAL     real magnitude type (double)
  *     SUF(x)   name mangling  (x##_d | x##_z)
  *     CONJ(x)  conjugate      (identity | conj)
  *     ABS2(x)  squared magnitude ((x)*(x) | re*re+im*im)
  * The driver also provides type-independent IDX(qr,i,j), cpu_relax(),
- * ilast_of(), and BANDQR_COLUMN_FN.
+ * ilast_of(), and BANDEDQR_COLUMN_FN.
  * No include guard -- this header is meant to be included multiple times.
  *
  * Givens (unitary) rotation zeroing b:  [[c, s], [-conj(s), c]] [a;b] = [r;0],
@@ -36,7 +36,7 @@ struct SUF(band_qr) {
     int     rfill;
 };
 
-void SUF(bandqr_free)(struct SUF(band_qr) *qr)
+void SUF(bandedqr_free)(struct SUF(band_qr) *qr)
 {
     if (!qr) return;
     free(qr->band); free(qr->c); free(qr->s); free(qr->p);
@@ -68,20 +68,20 @@ static inline void SUF(apply_rotation)(SCALAR *restrict rp, SCALAR *restrict rq,
     }
 }
 
-static BANDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
-                                             long off, bandqr_front_t *front)
+static BANDEDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
+                                             long off, bandedqr_front_t *front)
 {
     int m = qr->m, n = qr->n, kl = qr->kl, kuR = qr->kuR, W = qr->W;
     SCALAR *band = qr->band;
     int ilast = ilast_of(jcol, kl, m);
     long r = 0;
-#ifdef BANDQR_NO_THREADS
+#ifdef BANDEDQR_NO_THREADS
     (void)front;
 #else
     int since = 0;
 #endif
     for (int q = ilast; q >= jcol + 1; q--, r++) {
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
         if (front && jcol > 0)
             while (atomic_load_explicit(&front[jcol - 1].v, memory_order_acquire) > q - 1)
                 cpu_relax();
@@ -99,14 +99,14 @@ static BANDQR_COLUMN_FN void SUF(run_column)(struct SUF(band_qr) *qr, int jcol,
         qr->c[off + r] = c;
         qr->s[off + r] = s;
         qr->p[off + r] = p;
-#ifndef BANDQR_NO_THREADS
-        if (front && ++since >= BANDQR_FRONT_CHUNK) {
+#ifndef BANDEDQR_NO_THREADS
+        if (front && ++since >= BANDEDQR_FRONT_CHUNK) {
             atomic_store_explicit(&front[jcol].v, q, memory_order_release);
             since = 0;
         }
 #endif
     }
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
     if (front)
         atomic_store_explicit(&front[jcol].v, -1, memory_order_release);
 #endif
@@ -125,7 +125,7 @@ static struct SUF(band_qr) *SUF(alloc_and_load)(const SCALAR *ab, int m, int n,
 
     long *off = malloc((size_t)(n + 1) * sizeof(long));
     qr->band = calloc((size_t)m * qr->W, sizeof(SCALAR));
-    if (!off || !qr->band) { free(off); SUF(bandqr_free)(qr); return NULL; }
+    if (!off || !qr->band) { free(off); SUF(bandedqr_free)(qr); return NULL; }
 
     long total = 0;
     for (int j = 0; j < n; j++) {
@@ -138,7 +138,7 @@ static struct SUF(band_qr) *SUF(alloc_and_load)(const SCALAR *ab, int m, int n,
     qr->c = malloc((size_t)(total + 1) * sizeof(REAL));
     qr->s = malloc((size_t)(total + 1) * sizeof(SCALAR));
     qr->p = malloc((size_t)(total + 1) * sizeof(int));
-    if (!qr->c || !qr->s || !qr->p) { free(off); SUF(bandqr_free)(qr); return NULL; }
+    if (!qr->c || !qr->s || !qr->p) { free(off); SUF(bandedqr_free)(qr); return NULL; }
     qr->nrot = total;
 
     int Win = kl + ku + 1;
@@ -152,7 +152,7 @@ static struct SUF(band_qr) *SUF(alloc_and_load)(const SCALAR *ab, int m, int n,
     return qr;
 }
 
-struct SUF(band_qr) *SUF(bandqr_factor)(const SCALAR *ab, int m, int n, int kl, int ku)
+struct SUF(band_qr) *SUF(bandedqr_factor)(const SCALAR *ab, int m, int n, int kl, int ku)
 {
     long *off, total;
     struct SUF(band_qr) *qr = SUF(alloc_and_load)(ab, m, n, kl, ku, &off, &total);
@@ -163,11 +163,11 @@ struct SUF(band_qr) *SUF(bandqr_factor)(const SCALAR *ab, int m, int n, int kl, 
     return qr;
 }
 
-#ifndef BANDQR_NO_THREADS
+#ifndef BANDEDQR_NO_THREADS
 typedef struct {
     struct SUF(band_qr) *qr;
     const long      *off;
-    bandqr_front_t  *front;
+    bandedqr_front_t  *front;
     _Atomic int     *next_col;
     int              n;
 } SUF(worker_arg);
@@ -184,23 +184,23 @@ static void *SUF(worker)(void *a)
 }
 #endif
 
-struct SUF(band_qr) *SUF(bandqr_factor_mt)(const SCALAR *ab, int m, int n,
+struct SUF(band_qr) *SUF(bandedqr_factor_mt)(const SCALAR *ab, int m, int n,
                                            int kl, int ku, int nthreads)
 {
-#ifdef BANDQR_NO_THREADS
+#ifdef BANDEDQR_NO_THREADS
     (void)nthreads;
-    return SUF(bandqr_factor)(ab, m, n, kl, ku);
+    return SUF(bandedqr_factor)(ab, m, n, kl, ku);
 #else
     if (nthreads <= 1)                        /* 0 and 1 both mean serial */
-        return SUF(bandqr_factor)(ab, m, n, kl, ku);
+        return SUF(bandedqr_factor)(ab, m, n, kl, ku);
 
     long *off, total;
     struct SUF(band_qr) *qr = SUF(alloc_and_load)(ab, m, n, kl, ku, &off, &total);
     if (!qr) return NULL;
 
-    bandqr_front_t *front = calloc((size_t)n, sizeof *front);
+    bandedqr_front_t *front = calloc((size_t)n, sizeof *front);
     pthread_t      *th    = NULL;
-    if (!front) { free(off); SUF(bandqr_free)(qr); return NULL; }
+    if (!front) { free(off); SUF(bandedqr_free)(qr); return NULL; }
     for (int j = 0; j < n; j++)
         atomic_init(&front[j].v, ilast_of(j, kl, m) + 1);
 
@@ -210,7 +210,7 @@ struct SUF(band_qr) *SUF(bandqr_factor_mt)(const SCALAR *ab, int m, int n,
 
     SUF(worker_arg) wa = { qr, off, front, &next_col, n };
     th = malloc((size_t)nthreads * sizeof *th);
-    if (!th) { free(front); free(off); SUF(bandqr_free)(qr); return NULL; }
+    if (!th) { free(front); free(off); SUF(bandedqr_free)(qr); return NULL; }
     int spawned = 0;
     for (int t = 0; t < nthreads; t++)
         if (pthread_create(&th[t], NULL, SUF(worker), &wa) == 0) spawned++;
@@ -228,7 +228,7 @@ struct SUF(band_qr) *SUF(bandqr_factor_mt)(const SCALAR *ab, int m, int n,
  * subdiagonals at once; applied row-contiguously (weighted sum of row strips,
  * then an outer-product update).  R is the same band format; Q is stored as the
  * reflectors (V, tau) for Q^H application. */
-struct SUF(band_qr) *SUF(bandqr_factor_hh)(const SCALAR *ab, int m, int n,
+struct SUF(band_qr) *SUF(bandedqr_factor_hh)(const SCALAR *ab, int m, int n,
                                            int kl, int ku)
 {
     if (m < n || kl < 0 || ku < 0) return NULL;
@@ -242,7 +242,7 @@ struct SUF(band_qr) *SUF(bandqr_factor_hh)(const SCALAR *ab, int m, int n,
     qr->V    = calloc((size_t)n * (kl + 1), sizeof(SCALAR));
     qr->tau  = calloc((size_t)n, sizeof(SCALAR));
     SCALAR *u = malloc((size_t)(qr->kuR + 1) * sizeof(SCALAR));
-    if (!qr->band || !qr->V || !qr->tau || !u) { free(u); SUF(bandqr_free)(qr); return NULL; }
+    if (!qr->band || !qr->V || !qr->tau || !u) { free(u); SUF(bandedqr_free)(qr); return NULL; }
 
     int Win = kl + ku + 1, W = qr->W, kuR = qr->kuR;
     SCALAR *band = qr->band;
@@ -302,7 +302,7 @@ struct SUF(band_qr) *SUF(bandqr_factor_hh)(const SCALAR *ab, int m, int n,
  * rotations).  Adjacent-row Givens zero the true value M[q,j] = B[q,j] +
  * U[q,:].L[:,j], applied to B's band strips and U's rows; L stays fixed.
  * R = R_band + (Q^H U) L stays almost-banded.  Q is the stored rotations. */
-struct SUF(band_qr) *SUF(bandqr_factor_ab)(const SCALAR *ab, int m, int n,
+struct SUF(band_qr) *SUF(bandedqr_factor_ab)(const SCALAR *ab, int m, int n,
                                            int kl, int ku,
                                            const int *dr, int r, const SCALAR *Lin)
 {
@@ -323,7 +323,7 @@ struct SUF(band_qr) *SUF(bandqr_factor_ab)(const SCALAR *ab, int m, int n,
     qr->U = calloc((size_t)m * r, sizeof(SCALAR));
     qr->L = malloc((size_t)r * n * sizeof(SCALAR));
     if (!qr->band || !qr->c || !qr->s || !qr->p || !qr->U || !qr->L) {
-        SUF(bandqr_free)(qr); return NULL;
+        SUF(bandedqr_free)(qr); return NULL;
     }
     qr->nrot = total;
 
@@ -368,13 +368,13 @@ struct SUF(band_qr) *SUF(bandqr_factor_ab)(const SCALAR *ab, int m, int n,
 /* Solve A x = b for an almost-banded factorisation.  Q^H b, then back-solve
  * R x = y with R = R_band + U L: band sweep plus a running r-vector
  * g = sum_{j>i} L[:,j] x[j] carrying the low-rank fill. */
-double SUF(bandqr_solve_ab)(const struct SUF(band_qr) *qr, const SCALAR *b, SCALAR *x)
+double SUF(bandedqr_solve_ab)(const struct SUF(band_qr) *qr, const SCALAR *b, SCALAR *x)
 {
     int m = qr->m, n = qr->n, W = qr->W, kuR = qr->kuR, kl = qr->kl, r = qr->rfill;
     const SCALAR *band = qr->band, *U = qr->U, *L = qr->L;
     SCALAR *y = malloc((size_t)m * sizeof(SCALAR));
     memcpy(y, b, (size_t)m * sizeof(SCALAR));
-    SUF(bandqr_apply_Qt)(qr, y);                  /* Q^H b (stored rotations) */
+    SUF(bandedqr_apply_Qt)(qr, y);                  /* Q^H b (stored rotations) */
 
     SCALAR *g = calloc(r, sizeof(SCALAR));
     for (int i = n - 1; i >= 0; i--) {
@@ -399,7 +399,7 @@ double SUF(bandqr_solve_ab)(const struct SUF(band_qr) *qr, const SCALAR *b, SCAL
 }
 
 /* v (length m) <- Q^H v (Q^T for real). */
-void SUF(bandqr_apply_Qt)(const struct SUF(band_qr) *qr, SCALAR *v)
+void SUF(bandedqr_apply_Qt)(const struct SUF(band_qr) *qr, SCALAR *v)
 {
     if (qr->reflectors) {                 /* Householder: apply H_0 .. H_{n-1} */
         int kl = qr->kl, m = qr->m, klp = kl + 1;
@@ -423,7 +423,7 @@ void SUF(bandqr_apply_Qt)(const struct SUF(band_qr) *qr, SCALAR *v)
     }
 }
 
-void SUF(bandqr_solve_R)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR *x)
+void SUF(bandedqr_solve_R)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR *x)
 {
     const SCALAR *restrict band = qr->band;
     int n = qr->n, W = qr->W, kuR = qr->kuR, kl = qr->kl;
@@ -437,20 +437,20 @@ void SUF(bandqr_solve_R)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR 
     }
 }
 
-double SUF(bandqr_solve)(const struct SUF(band_qr) *qr, const SCALAR *b, SCALAR *x)
+double SUF(bandedqr_solve)(const struct SUF(band_qr) *qr, const SCALAR *b, SCALAR *x)
 {
     int m = qr->m, n = qr->n;
     SCALAR *y = malloc((size_t)m * sizeof(SCALAR));
     memcpy(y, b, (size_t)m * sizeof(SCALAR));
-    SUF(bandqr_apply_Qt)(qr, y);
-    SUF(bandqr_solve_R)(qr, y, x);
+    SUF(bandedqr_apply_Qt)(qr, y);
+    SUF(bandedqr_solve_R)(qr, y, x);
     REAL res = 0;
     for (int i = n; i < m; i++) res += ABS2(y[i]);
     free(y);
     return sqrt(res);
 }
 
-void SUF(bandqr_solve_many)(const struct SUF(band_qr) *qr, const SCALAR *B,
+void SUF(bandedqr_solve_many)(const struct SUF(band_qr) *qr, const SCALAR *B,
                             int nrhs, SCALAR *X, double *res)
 {
     int m = qr->m, n = qr->n, W = qr->W, kuR = qr->kuR, kl = qr->kl;
@@ -517,7 +517,7 @@ void SUF(bandqr_solve_many)(const struct SUF(band_qr) *qr, const SCALAR *B,
 }
 
 /* x = P y, P[k,j] = a[k-j+p]:  x[i] = sum_{m=0}^p a[p-m] y[i+m]. */
-void SUF(bandqr_apply_P)(const SCALAR *a, int p, const SCALAR *restrict y,
+void SUF(bandedqr_apply_P)(const SCALAR *a, int p, const SCALAR *restrict y,
                          int n, SCALAR *restrict x)
 {
     for (int i = 0; i < n; i++) {
@@ -528,12 +528,12 @@ void SUF(bandqr_apply_P)(const SCALAR *a, int p, const SCALAR *restrict y,
     }
 }
 
-/* v (length m) <- Q v -- the inverse of bandqr_apply_Qt.
+/* v (length m) <- Q v -- the inverse of bandedqr_apply_Qt.
  * Givens:  Q^H = G_{nrot-1} .. G_0, so Q = G_0^H .. G_{nrot-1}^H: replay the
  *          rotations in reverse, each conjugate-transposed.
  * Householder: Q^H applies H_0^H .. H_{n-1}^H in increasing j, so
  *          Q = H_0 .. H_{n-1}: apply H_j (tau, not conj tau) in decreasing j. */
-void SUF(bandqr_apply_Q)(const struct SUF(band_qr) *qr, SCALAR *v)
+void SUF(bandedqr_apply_Q)(const struct SUF(band_qr) *qr, SCALAR *v)
 {
     if (qr->reflectors) {
         int kl = qr->kl, m = qr->m, klp = kl + 1;
@@ -562,7 +562,7 @@ void SUF(bandqr_apply_Q)(const struct SUF(band_qr) *qr, SCALAR *v)
  *     x[i] = (y[i] - sum_{j=i-kuR}^{i-1} conj(R[j][i]) x[j]) / conj(R[i][i]).
  * Together with apply_Q this gives A^{-H} v = Q R^{-H} v, the second operator a
  * 1-norm condition estimator needs. */
-void SUF(bandqr_solve_Rt)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR *x)
+void SUF(bandedqr_solve_Rt)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR *x)
 {
     const SCALAR *restrict band = qr->band;
     int n = qr->n, W = qr->W, kuR = qr->kuR, kl = qr->kl;
@@ -579,7 +579,7 @@ void SUF(bandqr_solve_Rt)(const struct SUF(band_qr) *qr, const SCALAR *y, SCALAR
  * that carries the low-rank fill as an r x nrhs running block.  Amortises the
  * rotation replay across right-hand sides (the factor-once/solve-many path, and
  * what iterative refinement leans on). */
-void SUF(bandqr_solve_many_ab)(const struct SUF(band_qr) *qr, const SCALAR *B,
+void SUF(bandedqr_solve_many_ab)(const struct SUF(band_qr) *qr, const SCALAR *B,
                                int nrhs, SCALAR *X, double *res)
 {
     int m = qr->m, n = qr->n, W = qr->W, kuR = qr->kuR, kl = qr->kl, r = qr->rfill;
@@ -638,7 +638,7 @@ void SUF(bandqr_solve_many_ab)(const struct SUF(band_qr) *qr, const SCALAR *B,
 /* y <- A x for A in the caller's compact (kl,ku) band storage, ab[i*(kl+ku+1) +
  * (j-i+kl)].  Independent of any factorisation -- this is the original operator,
  * which iterative refinement needs to form residuals against. */
-void SUF(bandqr_band_matvec)(const SCALAR *ab, int m, int n, int kl, int ku,
+void SUF(bandedqr_band_matvec)(const SCALAR *ab, int m, int n, int kl, int ku,
                              const SCALAR *restrict x, SCALAR *restrict y)
 {
     int Win = kl + ku + 1;
@@ -663,7 +663,7 @@ void SUF(bandqr_band_matvec)(const SCALAR *ab, int m, int n, int kl, int ku,
  * whole (n, batch) temporary per diagonal and lands well short of memory
  * bandwidth.  Accumulating a row of the output across all its diagonals before
  * moving on keeps that row in cache and touches each array exactly once. */
-void SUF(bandqr_band_residual_batched)(const SCALAR *ab, int n, int w, int batch,
+void SUF(bandedqr_band_residual_batched)(const SCALAR *ab, int n, int w, int batch,
                                        int kl, int ku, const SCALAR *restrict x,
                                        const SCALAR *restrict b,
                                        SCALAR *restrict r)
@@ -683,7 +683,7 @@ void SUF(bandqr_band_residual_batched)(const SCALAR *ab, int n, int w, int batch
     }
 }
 
-void SUF(bandqr_get_R)(const struct SUF(band_qr) *qr, SCALAR *out)
+void SUF(bandedqr_get_R)(const struct SUF(band_qr) *qr, SCALAR *out)
 {
     int n = qr->n, kuR = qr->kuR, Wout = kuR + 1;
     memset(out, 0, (size_t)n * Wout * sizeof(SCALAR));

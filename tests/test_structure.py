@@ -2,8 +2,8 @@
 import numpy as np
 import pytest
 
-from bandqr import Structure, detect_structure
-from bandqr.structure import StructureWarning
+from bandedqr import Structure, detect_structure
+from bandedqr.structure import StructureWarning
 from conftest import make_almost_banded, make_banded
 
 

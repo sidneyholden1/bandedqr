@@ -13,9 +13,9 @@ import numpy as np
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0] + "/src")
 
-from bandqr import BandQR  # noqa: E402
-from bandqr import gpu as gpu_mod  # noqa: E402
-from bandqr.batched import BatchedBandQR as NumpyBatched  # noqa: E402
+from bandedqr import BandQR  # noqa: E402
+from bandedqr import gpu as gpu_mod  # noqa: E402
+from bandedqr.batched import BatchedBandQR as NumpyBatched  # noqa: E402
 
 
 def best(fn, reps=5, warm=2):
@@ -119,11 +119,11 @@ def main():
     args = ap.parse_args()
     if not gpu_mod.is_available():
         print("No MLX/Metal device available; nothing to benchmark.")
-        print("The NumPy batched backend still works: bandqr.solve_batched(..., "
+        print("The NumPy batched backend still works: bandedqr.solve_batched(..., "
               "backend='numpy')")
         return
     import platform
-    print(f"bandqr GPU benchmarks -- {platform.platform()} / {platform.machine()}")
+    print(f"bandedqr GPU benchmarks -- {platform.platform()} / {platform.machine()}")
     rng = np.random.default_rng(0)
     bench_throughput(rng, args.quick)
     bench_reuse(rng, args.quick)

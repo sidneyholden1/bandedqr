@@ -1,6 +1,6 @@
 # Algorithm and implementation contract
 
-This document fixes the mathematical conventions that all `bandqr` backends
+This document fixes the mathematical conventions that all `bandedqr` backends
 must follow.  It is an implementation contract, not a claim that every item is
 new.  Novelty, attribution, and publication claims are tracked separately in
 [`paper/claims_and_evidence.md`](../paper/claims_and_evidence.md).

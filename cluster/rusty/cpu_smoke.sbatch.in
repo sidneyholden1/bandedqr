@@ -9,19 +9,19 @@
 #SBATCH --mem=16G
 #SBATCH --time=00:15:00
 #SBATCH --no-requeue
-#SBATCH --chdir=__BANDQR_SOURCE_DIR__
-#SBATCH --output=__BANDQR_RUN_DIR__/logs/slurm-%j.out
-#SBATCH --error=__BANDQR_RUN_DIR__/logs/slurm-%j.err
+#SBATCH --chdir=__BANDEDQR_SOURCE_DIR__
+#SBATCH --output=__BANDEDQR_RUN_DIR__/logs/slurm-%j.out
+#SBATCH --error=__BANDEDQR_RUN_DIR__/logs/slurm-%j.err
 
 set -euo pipefail
 umask 027
 
-readonly CAMPAIGN_ID=__BANDQR_CAMPAIGN_ID_SHELL__
-readonly RUN_DIR=__BANDQR_RUN_DIR_SHELL__
-readonly DATA_DIR=__BANDQR_DATA_DIR_SHELL__
-readonly SOURCE_DIR=__BANDQR_SOURCE_DIR_SHELL__
-readonly ENV_DIR=__BANDQR_ENV_DIR_SHELL__
-readonly SOURCE_COMMIT=__BANDQR_COMMIT_SHELL__
+readonly CAMPAIGN_ID=__BANDEDQR_CAMPAIGN_ID_SHELL__
+readonly RUN_DIR=__BANDEDQR_RUN_DIR_SHELL__
+readonly DATA_DIR=__BANDEDQR_DATA_DIR_SHELL__
+readonly SOURCE_DIR=__BANDEDQR_SOURCE_DIR_SHELL__
+readonly ENV_DIR=__BANDEDQR_ENV_DIR_SHELL__
+readonly SOURCE_COMMIT=__BANDEDQR_COMMIT_SHELL__
 readonly DEDALUS_PYTHON="/mnt/home/sholden/network_instability/dedalus_codex_handoff/.venv-dedalus305/bin/python"
 
 module reset || true
@@ -44,9 +44,9 @@ for required in \
     fi
 done
 
-readonly BANDQR_PYTHON="${ENV_DIR}/bin/python"
-if [[ ! -x "${BANDQR_PYTHON}" ]]; then
-    echo "missing bandqr environment: ${BANDQR_PYTHON}" >&2
+readonly BANDEDQR_PYTHON="${ENV_DIR}/bin/python"
+if [[ ! -x "${BANDEDQR_PYTHON}" ]]; then
+    echo "missing bandedqr environment: ${BANDEDQR_PYTHON}" >&2
     exit 1
 fi
 if [[ ! -x "${DEDALUS_PYTHON}" ]]; then
@@ -61,7 +61,7 @@ write_status() {
     if [[ -n "${WORK_DIR:-}" && -f "${WORK_DIR}/cluster/common/write_status.py" ]]; then
         tool="${WORK_DIR}/cluster/common/write_status.py"
     fi
-    "${BANDQR_PYTHON}" "${tool}" \
+    "${BANDEDQR_PYTHON}" "${tool}" \
         --output "${RUN_DIR}/status.json" \
         --state "${state}" \
         --message "${message}"
@@ -94,7 +94,7 @@ if ! git -C "${SOURCE_DIR}" cat-file -e "${SOURCE_COMMIT}^{commit}"; then
     echo "submitted source commit is unavailable: ${SOURCE_COMMIT}" >&2
     exit 1
 fi
-WORK_ROOT="$(mktemp -d "${TEMP_ROOT%/}/bandqr-${SLURM_JOB_ID}.XXXXXX")"
+WORK_ROOT="$(mktemp -d "${TEMP_ROOT%/}/bandedqr-${SLURM_JOB_ID}.XXXXXX")"
 readonly WORK_ROOT
 WORK_DIR="${WORK_ROOT}/source"
 readonly WORK_DIR
@@ -109,26 +109,26 @@ mkdir -p "${DATA_DIR}/build" "${DATA_DIR}/logs" "${DATA_DIR}/verification"
 module -t list 2> "${DATA_DIR}/modules.txt"
 
 cc -O2 -std=c11 -fPIC -Wall -Wextra -Werror -shared \
-    -o "${DATA_DIR}/build/libbandqr_strict.so" \
-    "${WORK_DIR}/src/bandqr/csrc/bandqr.c" -lpthread -lm \
+    -o "${DATA_DIR}/build/libbandedqr_strict.so" \
+    "${WORK_DIR}/src/bandedqr/csrc/bandedqr.c" -lpthread -lm \
     > "${DATA_DIR}/logs/strict-build.log" 2>&1
-make -B -C "${WORK_DIR}" CC=cc PY="${BANDQR_PYTHON}" \
+make -B -C "${WORK_DIR}" CC=cc PY="${BANDEDQR_PYTHON}" \
     > "${DATA_DIR}/logs/package-build.log" 2>&1
 
-"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/capture_provenance.py" \
+"${BANDEDQR_PYTHON}" "${WORK_DIR}/cluster/common/capture_provenance.py" \
     --output "${RUN_DIR}/provenance.json" \
     --source "${SOURCE_DIR}" \
     --environment "${ENV_DIR}" \
     --expected-commit "${SOURCE_COMMIT}" \
     --hash "${RUN_DIR}/submitted.slurm" \
     --hash "${CONFIG}" \
-    --hash "${WORK_DIR}/src/bandqr/csrc/bandqr_impl.h"
+    --hash "${WORK_DIR}/src/bandedqr/csrc/bandedqr_impl.h"
 
-"${BANDQR_PYTHON}" -m pytest "${WORK_DIR}/tests" -q \
+"${BANDEDQR_PYTHON}" -m pytest "${WORK_DIR}/tests" -q \
     --junitxml="${DATA_DIR}/verification/pytest.xml" \
     > "${DATA_DIR}/logs/pytest.log" 2>&1
 
-"${BANDQR_PYTHON}" "${WORK_DIR}/bench/paper/drivers/cpu_smoke.py" \
+"${BANDEDQR_PYTHON}" "${WORK_DIR}/bench/paper/drivers/cpu_smoke.py" \
     --config "${CONFIG}" \
     --output "${DATA_DIR}/verification/cpu.json" \
     > "${DATA_DIR}/logs/cpu-smoke.log" 2>&1
@@ -138,7 +138,7 @@ make -B -C "${WORK_DIR}" CC=cc PY="${BANDQR_PYTHON}" \
     --output "${DATA_DIR}/verification/dedalus.json" \
     > "${DATA_DIR}/logs/dedalus-smoke.log" 2>&1
 
-"${BANDQR_PYTHON}" "${WORK_DIR}/cluster/common/aggregate_verification.py" \
+"${BANDEDQR_PYTHON}" "${WORK_DIR}/cluster/common/aggregate_verification.py" \
     --cpu "${DATA_DIR}/verification/cpu.json" \
     --dedalus "${DATA_DIR}/verification/dedalus.json" \
     --junit "${DATA_DIR}/verification/pytest.xml" \

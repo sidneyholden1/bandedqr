@@ -1,4 +1,4 @@
-% Minimal intro for the bandqr paper. Drop into Overleaf; fill in \cite keys.
+% Minimal intro for the bandedqr paper. Drop into Overleaf; fill in \cite keys.
 \section{Introduction}
 
 Spectral and tau methods discretise differential operators into matrices that are
@@ -16,7 +16,7 @@ a drop-in, type-generic solver, and the boundary-row sparsification that
 underlies its fastest variant has been carried out only analytically, basis by
 basis.
 
-We present \texttt{bandqr}, a compact banded and almost-banded QR solver, and make
+We present \texttt{bandedqr}, a compact banded and almost-banded QR solver, and make
 three contributions. First, we detect the linear recurrence that a boundary row
 satisfies \emph{automatically and numerically}---as the null space of a Hankel
 matrix formed from the row's values---and use it to collapse the boundary rows into
@@ -34,7 +34,7 @@ recurrence-collapse, and carried-boundary QR), real and complex arithmetic gener
 from a single templated kernel, and a batched GPU backend for the
 many-independent-systems regime of multidimensional spectral solves.
 
-We validate \texttt{bandqr} against the sparse-LU solver of Dedalus, the banded
+We validate \texttt{bandedqr} against the sparse-LU solver of Dedalus, the banded
 Householder QR of \texttt{pybanded}~\cite{pybanded}, and the reference almost-banded
 QR of \texttt{ApproxFun}~\cite{olver_approxfun}, and characterise its performance
 across problem size, bandwidth, conditioning, and batch size. Section~\ref{sec:methods} describes the factorisations and the automatic

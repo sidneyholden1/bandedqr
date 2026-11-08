@@ -110,7 +110,7 @@ def apply_preconditioner(a, y):
     p = len(a) - 1
     n = y.shape[0]
     pf = _native.ptr_for(cplx)
-    cfn = getattr(_native.lib, "bandqr_apply_P" + _native.suffix_for(cplx))
+    cfn = getattr(_native.lib, "bandedqr_apply_P" + _native.suffix_for(cplx))
     ap = pf(a)
     if y.ndim == 1:
         x = np.zeros(n, dtype=dt)

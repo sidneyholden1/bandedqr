@@ -1,4 +1,4 @@
-"""CPU benchmarks: bandqr against LAPACK band LU, across size and bandwidth.
+"""CPU benchmarks: bandedqr against LAPACK band LU, across size and bandwidth.
 
     python bench/bench_cpu.py [--quick]
 
@@ -13,8 +13,8 @@ import numpy as np
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0] + "/src")
 
-from bandqr import BandQR, band_to_dense, to_scipy_band  # noqa: E402
-from bandqr.almost import CollapseQR, RideQR  # noqa: E402
+from bandedqr import BandQR, band_to_dense, to_scipy_band  # noqa: E402
+from bandedqr.almost import CollapseQR, RideQR  # noqa: E402
 
 
 def best(fn, reps=7, warm=1):
@@ -36,7 +36,7 @@ def random_band(rng, n, kl, ku):
 
 def bench_vs_lapack(rng, quick):
     import scipy.linalg as sla
-    print("\n== factor + solve, one RHS: bandqr vs LAPACK band LU ==")
+    print("\n== factor + solve, one RHS: bandedqr vs LAPACK band LU ==")
     print(f"{'n':>8} {'kl':>4} {'ku':>4} | {'givens':>10} {'househldr':>10} "
           f"{'LAPACK LU':>10} | {'best vs LU':>10}")
     cases = [(1000, 2, 2), (10000, 2, 2), (100000, 2, 2),
@@ -53,7 +53,7 @@ def bench_vs_lapack(rng, quick):
         ratio = tl / min(tg, th)
         print(f"{n:8d} {kl:4d} {ku:4d} | {tg*1e3:9.3f}m {th*1e3:9.3f}m "
               f"{tl*1e3:9.3f}m | {ratio:9.2f}x")
-    print("  (>1 means bandqr is faster.  QR wins on narrow bands; LAPACK's")
+    print("  (>1 means bandedqr is faster.  QR wins on narrow bands; LAPACK's")
     print("   blocked band LU pulls ahead as the band widens.)")
 
 
@@ -110,9 +110,9 @@ def bench_almost_banded(rng, quick):
 
 
 def bench_threads(rng, quick):
-    from bandqr import has_threads
+    from bandedqr import has_threads
     if not has_threads():
-        print("\n== threading: unavailable (built with BANDQR_NO_THREADS) ==")
+        print("\n== threading: unavailable (built with BANDEDQR_NO_THREADS) ==")
         return
     print("\n== wavefront threading (auto stays serial below kl=64) ==")
     print(f"{'n':>8} {'kl':>4} | {'serial':>9} {'2thr':>9} {'4thr':>9} "
@@ -136,7 +136,7 @@ def main():
     args = ap.parse_args()
     rng = np.random.default_rng(0)
     import platform
-    print(f"bandqr CPU benchmarks -- {platform.platform()} / {platform.machine()}")
+    print(f"bandedqr CPU benchmarks -- {platform.platform()} / {platform.machine()}")
     bench_vs_lapack(rng, args.quick)
     bench_factor_reuse(rng, args.quick)
     bench_almost_banded(rng, args.quick)
