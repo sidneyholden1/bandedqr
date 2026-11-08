@@ -1,5 +1,7 @@
 # bandedqr
 
+[![CI](https://github.com/sidneyholden1/bandedqr/actions/workflows/ci.yml/badge.svg)](https://github.com/sidneyholden1/bandedqr/actions/workflows/ci.yml)
+
 `bandedqr` is a research implementation of QR factorization for banded and
 almost-banded linear systems. It combines a small C kernel with a Python API and
 batched accelerator backends for workloads containing many independent systems
@@ -313,9 +315,7 @@ archive/            superseded Dedalus integration and provenance notes
 
 ## License and citation
 
-No open-source license has been selected yet. Until a `LICENSE` file is added,
-the code is distributed with all rights reserved. This must be resolved before
-describing the repository as an open-source release.
+Released under the BSD 3-Clause License; see [`LICENSE`](LICENSE).
 
 There is not yet an archival release or DOI. If this repository is used in a
 proposal, cite the exact Git commit and the retained benchmark provenance rather

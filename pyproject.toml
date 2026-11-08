@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,10 +8,8 @@ version = "0.2.0"
 description = "Fast, deterministic banded and almost-banded QR, with a batched GPU backend"
 readme = "README.md"
 requires-python = ">=3.9"
-# No licence chosen yet -- until one is added the default is all rights
-# reserved, so add a LICENSE file and restore
-#     license = { file = "LICENSE" }
-# before publishing to PyPI.
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{ name = "Sid Holden" }]
 keywords = ["linear-algebra", "qr", "banded", "spectral-methods", "gpu", "metal"]
 classifiers = [

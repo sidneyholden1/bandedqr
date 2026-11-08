@@ -14,6 +14,8 @@
   conformance, timing distributions, provenance, accounting, and checkpointing.
 - Publish a byte-reproducible scaling SVG and timing tables covering CPU size
   and thread scaling, factor reuse, and transfer-inclusive/resident CUDA paths.
+- Publish the repository under the BSD 3-Clause License with continuously
+  tested Linux, macOS, sanitizer, strict-C11, and serial configurations.
 
 ## 0.2.0 — standalone library
 

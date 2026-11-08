@@ -101,14 +101,12 @@ impact remain the paper's research programme.
 
 ## Decisions for the authors
 
-The authors must decide the central mathematical claim, intended venue,
-baseline set, supported API, licensing, public repository/account, and wording
-for use of AI-assisted code.  The fact that Claude wrote substantial code does
-not prevent publication, but the human authors must understand, validate, and
-take responsibility for every algorithm, result, and claim.  Journal and
-institutional disclosure policies should be checked at submission time.
+The authors must still decide the central mathematical claim, intended venue,
+baseline set, supported API, and wording for use of AI-assisted code.  The fact
+that Claude wrote substantial code does not prevent publication, but the human
+authors must understand, validate, and take responsibility for every algorithm,
+result, and claim. Journal and institutional disclosure policies should be
+checked at submission time.
 
-The exact history is retained in the private repository
-`sidneyholden1/bandedqr`. Until the authors select a license and explicitly
-change its visibility, the project should avoid claiming an open-source or
-public release; the code remains all rights reserved.
+The exact history is published at
+`https://github.com/sidneyholden1/bandedqr` under the BSD 3-Clause License.
