@@ -6,11 +6,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+
+
+RESULTS_START = "<!-- RUSTY_SCALING_RESULTS_START -->"
+RESULTS_END = "<!-- RUSTY_SCALING_RESULTS_END -->"
 
 
 def sha256(path: Path) -> str:
@@ -127,6 +132,43 @@ def markdown_tables(cpu: list[dict], cuda: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def relative_markdown_path(target: Path, document: Path) -> str:
+    return os.path.relpath(target.resolve(), document.resolve().parent).replace(
+        os.sep, "/"
+    )
+
+
+def update_readme_results(
+    readme: Path,
+    *,
+    figure: Path,
+    summary: Path,
+    table: str,
+    source_commit: str,
+) -> None:
+    original = readme.read_text(encoding="utf-8")
+    if original.count(RESULTS_START) != 1 or original.count(RESULTS_END) != 1:
+        raise ValueError("README must contain one Rusty results marker pair")
+    start = original.index(RESULTS_START)
+    end = original.index(RESULTS_END, start) + len(RESULTS_END)
+    figure_link = relative_markdown_path(figure, readme)
+    summary_link = relative_markdown_path(summary, readme)
+    replacement = "\n".join(
+        [
+            RESULTS_START,
+            f"Accepted Rusty results for source commit `{source_commit}`:",
+            "",
+            f"![CPU and CUDA scaling on Rusty]({figure_link})",
+            "",
+            table.rstrip(),
+            "",
+            f"Machine-readable timings and provenance: [{summary_link}]({summary_link}).",
+            RESULTS_END,
+        ]
+    )
+    atomic_text(readme, original[:start] + replacement + original[end:])
+
+
 def render_figure(cpu: list[dict], cuda: list[dict], output: Path) -> None:
     mpl.rcParams.update(
         {
@@ -219,11 +261,20 @@ def main() -> int:
     parser.add_argument("--figure", type=Path, required=True)
     parser.add_argument("--table", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument(
+        "--readme",
+        type=Path,
+        help="replace the marked README results block after rendering",
+    )
     args = parser.parse_args()
     cpu_record = load_pass(args.cpu, "cpu")
     cuda_record = load_pass(args.cuda, "cuda")
     if cpu_record["config_sha256"] != cuda_record["config_sha256"]:
         raise ValueError("CPU and CUDA records used different benchmark configs")
+    cpu_commit = cpu_record["provenance"]["source_commit"]
+    cuda_commit = cuda_record["provenance"]["source_commit"]
+    if not cpu_commit or cpu_commit != cuda_commit:
+        raise ValueError("CPU and CUDA records used different source commits")
     cpu = cpu_rows(cpu_record)
     cuda = cuda_rows(cuda_record)
     if not cpu or not cuda:
@@ -236,7 +287,7 @@ def main() -> int:
         {
             "schema_version": 1,
             "config_sha256": cpu_record["config_sha256"],
-            "source_commit": cpu_record["provenance"]["source_commit"],
+            "source_commit": cpu_commit,
             "inputs": {
                 "cpu": {"path": str(args.cpu), "sha256": sha256(args.cpu)},
                 "cuda": {"path": str(args.cuda), "sha256": sha256(args.cuda)},
@@ -251,6 +302,14 @@ def main() -> int:
             "table": str(args.table),
         },
     )
+    if args.readme is not None:
+        update_readme_results(
+            args.readme,
+            figure=args.figure,
+            summary=args.summary,
+            table=table,
+            source_commit=cpu_commit,
+        )
     return 0
 
 

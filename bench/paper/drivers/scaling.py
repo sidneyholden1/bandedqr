@@ -78,6 +78,8 @@ def git_value(*args: str) -> str | None:
 
 
 def provenance(mode: str) -> dict:
+    bundled_commit = os.environ.get("BANDEDQR_SOURCE_COMMIT")
+    bundled_dirty = os.environ.get("BANDEDQR_SOURCE_DIRTY")
     return {
         "mode": mode,
         "started_utc": utc_now(),
@@ -86,8 +88,15 @@ def provenance(mode: str) -> dict:
         "machine": platform.machine(),
         "python": sys.version,
         "numpy": np.__version__,
-        "source_commit": git_value("rev-parse", "HEAD"),
-        "source_dirty": bool(git_value("status", "--porcelain")),
+        "source_commit": bundled_commit or git_value("rev-parse", "HEAD"),
+        "source_dirty": (
+            bundled_dirty.strip().lower() not in {"", "0", "false", "no"}
+            if bundled_dirty is not None
+            else bool(git_value("status", "--porcelain"))
+        ),
+        "bundle_manifest_sha256": os.environ.get(
+            "BANDEDQR_BUNDLE_MANIFEST_SHA256"
+        ),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "slurm_job_cpus_per_node": os.environ.get("SLURM_JOB_CPUS_PER_NODE"),
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),

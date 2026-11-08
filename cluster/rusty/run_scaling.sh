@@ -54,6 +54,20 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export NUMEXPR_MAX_THREADS=1
 
+# The extracted archive has no .git directory. Carry source identity from the
+# verified immutable manifest rather than consulting the submitter's checkout.
+export BANDEDQR_SOURCE_COMMIT
+BANDEDQR_SOURCE_COMMIT="$(
+    python3 -c \
+        'import json, sys; print(json.load(open(sys.argv[1]))["source_commit"])' \
+        "${BUNDLE}/manifest.json"
+)"
+export BANDEDQR_SOURCE_DIRTY=0
+export BANDEDQR_BUNDLE_MANIFEST_SHA256
+BANDEDQR_BUNDLE_MANIFEST_SHA256="$(
+    sha256sum "${BUNDLE}/manifest.json" | cut -d' ' -f1
+)"
+
 readonly WORK_ROOT="${SLURM_TMPDIR}/bandedqr-${SLURM_JOB_ID}"
 readonly SOURCE="${WORK_ROOT}/source"
 mkdir -p "${SOURCE}"

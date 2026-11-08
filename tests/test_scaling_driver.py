@@ -75,3 +75,16 @@ def test_checkpoint_refuses_config_change(tmp_path):
         assert "does not match" in str(error)
     else:
         raise AssertionError("changed config was accepted")
+
+
+def test_provenance_prefers_immutable_bundle_identity(monkeypatch):
+    monkeypatch.setenv("BANDEDQR_SOURCE_COMMIT", "abc123")
+    monkeypatch.setenv("BANDEDQR_SOURCE_DIRTY", "0")
+    monkeypatch.setenv("BANDEDQR_BUNDLE_MANIFEST_SHA256", "def456")
+    monkeypatch.setattr(scaling, "git_value", lambda *args: "wrong-checkout")
+
+    record = scaling.provenance("cpu")
+
+    assert record["source_commit"] == "abc123"
+    assert record["source_dirty"] is False
+    assert record["bundle_manifest_sha256"] == "def456"
