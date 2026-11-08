@@ -108,6 +108,7 @@ not prevent publication, but the human authors must understand, validate, and
 take responsibility for every algorithm, result, and claim.  Journal and
 institutional disclosure policies should be checked at submission time.
 
-Until those decisions are made, the project should avoid claiming a public
-release: there is no `LICENSE` file, the package URLs are provisional, and no
-public GitHub repository has been selected.
+The exact history is retained in the private repository
+`sidneyholden1/bandedqr`. Until the authors select a license and explicitly
+change its visibility, the project should avoid claiming an open-source or
+public release; the code remains all rights reserved.

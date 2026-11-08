@@ -33,7 +33,10 @@ test = ["pytest>=7", "scipy>=1.7"]
 bench = ["scipy>=1.7", "matplotlib>=3.5", "pandas>=1.3"]
 all = ["scipy>=1.7", "mlx>=0.20", "cupy>=13", "pytest>=7", "matplotlib>=3.5", "pandas>=1.3"]
 
-# Add verified project URLs when a hosting repository is selected.
+[project.urls]
+Homepage = "https://github.com/sidneyholden1/bandedqr"
+Repository = "https://github.com/sidneyholden1/bandedqr"
+Issues = "https://github.com/sidneyholden1/bandedqr/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
