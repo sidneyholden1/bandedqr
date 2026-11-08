@@ -31,11 +31,24 @@ and SuperLU: normalized residuals were approximately `1.74e-16` and
 `3.75e-16`.  These are correctness observations for one defined case, not an
 end-to-end performance comparison.
 
+The current scaling record is campaign `rusty-scaling-20261108` at commit
+`efa71b0d853e6baeccd14411f74a60f63d58ca4d`. Slurm jobs `7428056` (one
+exclusive 96-CPU Genoa node) and `7428058` (one NVIDIA H100 SXM5) both
+completed. The CPU allocation reports 188 passing and 31 skipped tests and 24
+timing cases. The H100 allocation reports 197 passing and 23 skipped tests, all
+18 supported CUDA conformance checks passing, and five batch-scaling cases.
+The public SVG, all 29 timing rows with sample distributions, input hashes, and
+machine provenance are retained in `figures/rusty-scaling.svg` and
+`bench/results/rusty-scaling-summary.json`; raw records and logs remain under
+the registered Ceph campaign root.
+
 Failed campaigns remain part of the audit trail: the first exposed a missing
 Slurm temporary-directory assumption, the second exposed GCC-dependent complex
 threading nondeterminism, and the third exposed a `PYTHONPATH` interaction with
 Dedalus/mpi4py.  Keeping them is evidence that the final record was not selected
-by silently overwriting failures.
+by silently overwriting failures. The current scaling ledger likewise retains
+failed job `7427976`, which exposed Rusty's absent `SLURM_TMPDIR`, and cancelled
+job `7427979`, which was stopped before allocation to prevent the same failure.
 
 ## Claim map
 
@@ -45,14 +58,15 @@ by silently overwriting failures.
 | Threaded and serial Givens factorisations produce bit-identical `R` under the supported build settings. | **supported, scoped** | Rusty real/complex regression at 2, 4, and 8 threads after the GCC fix. | Add CI/compiler coverage and wider `n, kl, ku` campaign cases. |
 | The same small Dedalus operator can be solved accurately with `bandqr` and SuperLU. | **supported, scoped** | Rusty Dedalus smoke above. | Add representative Dedalus boundary-value and IVP workloads, setup/solve separation, and scaling. |
 | A Metal batched backend implements the same recurrence and supports real, complex, shifted, multi-RHS, refinement, reuse, and dense-row cases. | **implemented, evidence pending** | Source and skipped-on-non-Metal unit tests; preliminary development-machine runs. | Run the immutable local Metal conformance campaign and retain its provenance/output. |
-| A CUDA/CuPy batched backend supports real, complex, shifted, multi-RHS, refinement, and reuse cases. | **implemented, evidence pending** | Source, offline CUDA 13.3 compilation, optional device tests, and the shared backend contract; no completed device record yet. | Pass the immutable Rusty CUDA conformance campaign before making performance or cross-platform claims. |
-| Mixed precision recovers near-double-precision accuracy on useful problem classes. | **hypothesis with preliminary support** | Existing tests and development benchmarks; no condition-number sweep in an immutable campaign. | Measure raw and refined error versus actual conditioning for real/complex families, including stagnation/failure. |
+| A CUDA/CuPy batched backend supports real, complex, shifted, multi-RHS, refinement, and reuse cases. | **supported, scoped** | H100 job `7428058`: 197 tests passed and all 18 supported conformance checks passed for real/complex ordinary, shifted, multi-RHS, reuse, and conditioned families. Dense-row/Ride was explicitly recorded as unsupported. | Retain a second architecture/compiler record and implement CUDA dense-row/Ride before claiming capability parity with Metal. |
+| Mixed precision recovers near-double-precision accuracy on useful problem classes. | **supported, scoped** | Retained H100 conformance passed registered real/complex families and target-condition cases through `1e6`; performance cases produced refined residuals from `3.2e-14` to `4.9e-14`. | Expand the conditioning sweep, record actual condition estimates, and retain stagnation/failure envelopes before general stability language. |
+| On the registered H100 workload, refined end-to-end CUDA execution is faster than the portable NumPy batch path. | **supported, scoped** | For `n=256`, `kl=ku=4`, and batches 64--16,384, retained medians show 7.6--11.8× speedups with all timing samples and provenance published. | Vary system size, bandwidth, dtype, conditioning, and CPU baseline; add uncertainty across independent process runs. |
 | Batched Metal execution is materially faster than CPU alternatives. | **hypothesis** | README numbers are preliminary, best-of-N measurements from one M3 Max. | Pre-register timing rules; compare transfer-inclusive and device-resident time with uncertainty across size/band/batch regimes. |
 | There is no serious existing banded-QR implementation serving these structured and accelerator use cases. | **hypothesis / literature claim** | Informal domain assessment only. | Systematic literature/software survey led by the authors; define “banded,” “QR,” “maintained,” and “accelerator” precisely. |
 | The recurrence or scheduling construction is novel. | **hypothesis / mathematical claim** | Implementation exists; novelty has not been established by repository evidence. | Coauthor derivation, prior-art search, precise theorem/algorithm statement, and appropriate citations or proof. |
 | The method is unconditionally backward stable. | **not supported** | No proof or campaign can establish this unqualified statement; no pivoting and mixed precision impose hypotheses. | Replace with a qualified theorem/citation or scoped empirical stability language. |
 | The implementation is suitable as a Dedalus backend. | **hypothesis with integration signal** | One same-operator smoke case and archived earlier integration work. | Agree an API with Dedalus maintainers; run realistic matrices and time assembly, factorisation, repeated solves, and memory. |
-| Accelerator support spans Apple Metal and NVIDIA CUDA. | **implemented, not yet verified across both devices** | Metal/MLX and CUDA/CuPy code paths exist; the frozen CUDA campaign has not run, and CUDA dense-row/Ride remains unsupported. | Pass retained conformance on both devices and state the capability difference explicitly. |
+| Accelerator support spans Apple Metal and NVIDIA CUDA. | **implemented; CUDA verified, Metal evidence pending** | Metal/MLX and CUDA/CuPy code paths exist; retained H100 conformance passed every supported CUDA family, while CUDA dense-row/Ride remains unsupported. | Pass retained Metal conformance and state the capability difference explicitly. |
 
 ## Provisional manuscript language
 
@@ -64,10 +78,10 @@ The following ideas in `paper/intro.tex` should remain explicitly provisional:
 - language that implies the Metal backend establishes general GPU support.
 
 A defensible current description is narrower: the repository contains a
-deterministic structured CPU implementation, a Metal batched implementation,
-and initial cross-platform correctness evidence; the comparative performance,
-stability envelope, novelty, and application impact are the paper's research
-programme.
+deterministic structured CPU implementation, Metal and CUDA batched
+implementations, retained H100 correctness evidence, and scoped CPU/H100
+scaling measurements. The broad stability envelope, novelty, and application
+impact remain the paper's research programme.
 
 ## Minimum experiment set before drafting results
 
@@ -76,10 +90,10 @@ programme.
    multi-RHS, real/complex data, and dense-row/Ride cases.
 2. Activate CI for GCC, Clang, macOS arm64, serial portability, standalone-file
    freshness, and sanitizers.
-3. Run a CPU scaling campaign over `n`, `kl`, `ku`, threads, dtype, and right-
-   hand-side count; retain medians/distributions, not best-of-N alone.
-4. Pass CUDA conformance under the same contract before accepting any Rusty GPU
-   performance record.
+3. Extend the retained fixed-bandwidth float64 CPU baseline across `kl`, `ku`,
+   complex data, and additional right-hand-side regimes.
+4. Extend the accepted H100 record across system size, bandwidth, dtype,
+   conditioning, and at least one additional NVIDIA architecture.
 5. Select a small set of representative Dedalus problems with the coauthors
    and measure end-to-end effects as well as kernel timings.
 6. Compare against clearly configured dense QR, LAPACK banded alternatives

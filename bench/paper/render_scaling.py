@@ -78,7 +78,17 @@ def cuda_rows(record: dict) -> list[dict]:
     return sorted(rows, key=lambda row: row["batch"])
 
 
-def markdown_tables(cpu: list[dict], cuda: list[dict]) -> str:
+def family_rows(record: dict, family: str, key: str) -> list[dict]:
+    rows = [row for row in record["results"] if row["family"] == family]
+    return sorted(rows, key=lambda row: row[key])
+
+
+def markdown_tables(
+    cpu: list[dict],
+    threads: list[dict],
+    reuse: list[dict],
+    cuda: list[dict],
+) -> str:
     by_size = {}
     for row in cpu:
         by_size.setdefault(row["n"], {})[row["method"]] = row
@@ -101,6 +111,53 @@ def markdown_tables(cpu: list[dict], cuda: list[dict]) -> str:
                 ),
                 lu=concise_time(methods["lapack_lu"]["timing"]["median"]),
                 residual=residual,
+            )
+        )
+    baseline = threads[0]["timing"]["median"]
+    thread_case = threads[0]
+    lines += [
+        "",
+        "### CPU thread scaling",
+        "",
+        "Fixed `n = {n:,}`, `kl = ku = {kl}`; median Givens factor + solve "
+        "time. Speedup is relative to one thread.".format(
+            n=thread_case["n"], kl=thread_case["kl"]
+        ),
+        "",
+        "| threads | time | speedup | residual |",
+        "|---:|---:|---:|---:|",
+    ]
+    for row in threads:
+        median = row["timing"]["median"]
+        lines.append(
+            "| {threads} | {time} | {speedup:.2f}× | {residual:.1e} |".format(
+                threads=row["threads"],
+                time=concise_time(median),
+                speedup=baseline / median,
+                residual=row["normalized_residual"],
+            )
+        )
+    reuse_case = reuse[0]
+    lines += [
+        "",
+        "### CPU factor reuse",
+        "",
+        "Fixed `n = {n:,}`, `kl = ku = {kl}`; median solve time with an "
+        "already-factorized matrix.".format(
+            n=reuse_case["n"], kl=reuse_case["kl"]
+        ),
+        "",
+        "| right-hand sides | total solve | time / RHS | max residual |",
+        "|---:|---:|---:|---:|",
+    ]
+    for row in reuse:
+        median = row["timing"]["median"]
+        lines.append(
+            "| {nrhs} | {total} | {per_rhs} | {residual:.1e} |".format(
+                nrhs=row["nrhs"],
+                total=concise_time(median),
+                per_rhs=concise_time(median / row["nrhs"]),
+                residual=row["normalized_residual"],
             )
         )
     lines += [
@@ -180,6 +237,7 @@ def render_figure(cpu: list[dict], cuda: list[dict], output: Path) -> None:
             "lines.markersize": 5,
             "axes.spines.top": False,
             "axes.spines.right": False,
+            "svg.hashsalt": "bandedqr-rusty-scaling-v1",
         }
     )
     figure, (left, right) = plt.subplots(1, 2, figsize=(10.2, 4.0))
@@ -276,11 +334,13 @@ def main() -> int:
     if not cpu_commit or cpu_commit != cuda_commit:
         raise ValueError("CPU and CUDA records used different source commits")
     cpu = cpu_rows(cpu_record)
+    threads = family_rows(cpu_record, "cpu_thread_scaling", "threads")
+    reuse = family_rows(cpu_record, "cpu_factor_reuse", "nrhs")
     cuda = cuda_rows(cuda_record)
-    if not cpu or not cuda:
-        raise ValueError("both records must contain scaling cases")
+    if not cpu or not threads or not reuse or not cuda:
+        raise ValueError("records must contain every configured scaling family")
     render_figure(cpu, cuda, args.figure)
-    table = markdown_tables(cpu, cuda)
+    table = markdown_tables(cpu, threads, reuse, cuda)
     atomic_text(args.table, table)
     atomic_json(
         args.summary,
@@ -297,6 +357,8 @@ def main() -> int:
                 "cuda": cuda_record["provenance"],
             },
             "cpu_size_scaling": cpu,
+            "cpu_thread_scaling": threads,
+            "cpu_factor_reuse": reuse,
             "cuda_batch_scaling": cuda,
             "figure": str(args.figure),
             "table": str(args.table),

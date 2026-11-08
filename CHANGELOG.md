@@ -8,6 +8,12 @@
 - Keep mathematical class names such as `BandQR` and `BatchedBandQR` unchanged.
 - Preserve pre-rename archives and immutable experiment records. See
   `docs/rename_migration.md` for installation and path migration.
+- Add a CuPy/CUDA backend for real and complex banded batches, shifted systems,
+  multiple right-hand sides, factor reuse, and mixed-precision refinement.
+- Add an immutable, quota-aware Rusty campaign with retained CPU/H100
+  conformance, timing distributions, provenance, accounting, and checkpointing.
+- Publish a byte-reproducible scaling SVG and timing tables covering CPU size
+  and thread scaling, factor reuse, and transfer-inclusive/resident CUDA paths.
 
 ## 0.2.0 — standalone library
 

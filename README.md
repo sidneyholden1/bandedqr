@@ -13,10 +13,10 @@ faster than established alternatives and over what conditioning range mixed
 precision remains reliable—are treated as measurements, not assumptions.
 
 > **Project status:** research prototype. CPU correctness has been exercised on
-> macOS and Linux, including an immutable Rusty campaign. Metal is implemented
-> and has preliminary development-machine results. The CUDA backend and the
-> reproducible CPU/CUDA scaling campaign are implemented; public performance
-> numbers will be added only after the frozen Rusty campaign passes.
+> macOS and Linux. The retained Rusty campaign passed on a 96-core Genoa node
+> and an NVIDIA H100, including CUDA conformance and the public measurements
+> below. Metal is implemented and has preliminary development-machine results,
+> but does not yet have an equivalent retained campaign.
 
 ## What is implemented
 
@@ -159,17 +159,70 @@ publication-quality claims. The current ledger is
 [`paper/claims_and_evidence.md`](paper/claims_and_evidence.md).
 
 <!-- RUSTY_SCALING_RESULTS_START -->
-The frozen Rusty scaling campaign is prepared but has not yet been submitted.
-It will measure:
+Accepted Rusty results for source commit `efa71b0d853e6baeccd14411f74a60f63d58ca4d`:
 
-- fixed-bandwidth CPU size scaling against LAPACK band LU;
-- CPU thread scaling and factor reuse;
-- CUDA batch scaling with resident and transfer-inclusive timings;
-- raw and refined accelerator residuals; and
-- complete machine, compiler, CUDA, source, and timing provenance.
+![CPU and CUDA scaling on Rusty](figures/rusty-scaling.svg)
 
-No Rusty CUDA performance claim is made before that campaign passes.
+### CPU size scaling
+
+Fixed `kl = ku = 4`, one thread; median factor + solve time.
+
+| n | bandedqr Givens | bandedqr Householder | LAPACK band LU | max residual |
+|---:|---:|---:|---:|---:|
+| 1,024 | 0.11 ms | 0.084 ms | 0.074 ms | 3.4e-16 |
+| 4,096 | 0.42 ms | 0.31 ms | 0.26 ms | 3.4e-16 |
+| 16,384 | 1.64 ms | 1.20 ms | 0.99 ms | 3.4e-16 |
+| 65,536 | 6.54 ms | 4.75 ms | 3.94 ms | 3.5e-16 |
+| 262,144 | 26.9 ms | 20.0 ms | 16.9 ms | 3.5e-16 |
+
+### CPU thread scaling
+
+Fixed `n = 32,768`, `kl = ku = 64`; median Givens factor + solve time. Speedup is relative to one thread.
+
+| threads | time | speedup | residual |
+|---:|---:|---:|---:|
+| 1 | 153.0 ms | 1.00× | 1.2e-15 |
+| 2 | 281.7 ms | 0.54× | 1.2e-15 |
+| 4 | 170.5 ms | 0.90× | 1.2e-15 |
+| 8 | 128.3 ms | 1.19× | 1.2e-15 |
+| 16 | 124.1 ms | 1.23× | 1.2e-15 |
+| 32 | 124.2 ms | 1.23× | 1.2e-15 |
+
+### CPU factor reuse
+
+Fixed `n = 65,536`, `kl = ku = 8`; median solve time with an already-factorized matrix.
+
+| right-hand sides | total solve | time / RHS | max residual |
+|---:|---:|---:|---:|
+| 1 | 4.57 ms | 4.57 ms | 4.7e-16 |
+| 8 | 6.01 ms | 0.75 ms | 4.7e-16 |
+| 32 | 12.0 ms | 0.38 ms | 4.7e-16 |
+
+### CUDA batch scaling
+
+Fixed `n = 256`, `kl = ku = 4`. CUDA refined timings include host/device transfers, factorization, solve, and mixed-precision refinement; the resident column is the raw solve with factors and RHS already on device.
+
+| batch | CPU NumPy factor + solve | CUDA refined end-to-end | speedup | CUDA resident re-solve | refined residual |
+|---:|---:|---:|---:|---:|---:|
+| 64 | 31.1 ms | 3.10 ms | 10.0× | 0.46 ms | 3.2e-14 |
+| 256 | 40.9 ms | 3.70 ms | 11.0× | 0.48 ms | 4.1e-14 |
+| 1,024 | 79.6 ms | 7.20 ms | 11.1× | 0.48 ms | 4.2e-14 |
+| 4,096 | 268.9 ms | 22.8 ms | 11.8× | 1.00 ms | 4.5e-14 |
+| 16,384 | 836.9 ms | 109.6 ms | 7.6× | 1.06 ms | 4.9e-14 |
+
+Machine-readable timings and provenance: [bench/results/rusty-scaling-summary.json](bench/results/rusty-scaling-summary.json).
 <!-- RUSTY_SCALING_RESULTS_END -->
+
+These measurements locate the immediate optimization work. On the registered
+H100 case at batch 16,384, raw transfer-inclusive factor + solve takes 37.8 ms,
+while the refined path takes 109.6 ms and a resident re-solve takes 1.06 ms.
+This makes host-side double-precision refinement the first profiling target,
+followed by CUDA factorization. On CPU, scaling saturates near 1.23× at 16
+threads and the two-thread case regresses, so scheduling overhead and work
+partitioning matter more than simply exposing more threads. The narrow-band
+single-solve CPU results do not outperform LAPACK band LU; the present case for
+QR is predictable structure, accelerator batching, and factor reuse rather
+than a universal single-solve speed advantage.
 
 The benchmark configuration and drivers are versioned:
 
